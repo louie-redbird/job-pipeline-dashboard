@@ -406,28 +406,28 @@ input::placeholder, textarea::placeholder { color: var(--text-ter); }
   position: sticky;
   top: 0;
   z-index: 50;
-  background: var(--bg-elevated);
+  background: var(--bg-secondary);
   backdrop-filter: blur(8px) saturate(1.1);
   -webkit-backdrop-filter: blur(8px) saturate(1.1);
   margin-top: -24px;
   padding-top: 18px;
 }
 /* Header background extends horizontally beyond .wrap so coloured column
-   washes can\'t bleed through on either side when scrolled. White
-   (--bg-elevated) gives the header a clean, prominent look that lifts
-   it off the warm-grey page body. */
+   washes can\'t bleed through on either side when scrolled. Warm grey
+   tint (--bg-secondary) makes the header stand out from the page body
+   without shouting — distinguishes "nav band" from "content area". */
 .header::before {
   content: '';
   position: absolute;
-  top: -32px;  /* cover body padding-top so the very top is white too */
+  top: 0;
   bottom: -1px;  /* cover the header\'s own border */
   left: -50vw;
   right: -50vw;
-  background: var(--bg-elevated);
+  background: var(--bg-secondary);
   z-index: -1;
   border-bottom: 1px solid var(--border);
 }
-[data-theme="dark"] .header::before { background: var(--bg-elevated); }
+[data-theme="dark"] .header::before { background: #181D2E; }
 /* When the page is scrolled and the sticky header is floating, add a subtle
    shadow so it visually separates from the scrolled content */
 .header.is-stuck {
@@ -638,6 +638,38 @@ input::placeholder, textarea::placeholder { color: var(--text-ter); }
   padding: 0 14px;
   font-size: 13px;
   white-space: nowrap;
+}
+
+/* Dev button — opens a meta-prompt for starting tech-change chats.
+   Sized to match header-burger height with a short label beside the icon. */
+.header-dev-btn {
+  height: 34px;
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  color: var(--text-sec);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  transition: background var(--duration-fast) var(--ease), border-color var(--duration-fast) var(--ease), color var(--duration-fast) var(--ease);
+  white-space: nowrap;
+}
+.header-dev-btn:hover {
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-elevated));
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.header-dev-btn svg { flex-shrink: 0; }
+@media (max-width: 480px) {
+  /* On narrow mobile, hide the Dev button entirely — tech updates are a
+     desktop activity and the header is already tight at this width. */
+  .header-actions > .header-dev-btn { display: none; }
 }
 
 /* Hamburger trigger — opens header-menu drawer */
@@ -886,6 +918,24 @@ input::placeholder, textarea::placeholder { color: var(--text-ter); }
 .today-task.done .today-task-check {
   background: var(--success-soft);
   border-color: var(--success);
+  /* Tick icon pulses once when the task flips to done. The svg inside
+     scales 0 → 1.2 → 1 over 280ms so completion feels rewarding without
+     becoming a distraction on subsequent re-renders. Animation only runs
+     on the .done state, so unticking and re-ticking re-triggers it. */
+  animation: today-task-pop 0.35s var(--ease-spring);
+}
+.today-task.done .today-task-check svg {
+  animation: today-task-tick-in 0.32s var(--ease-spring);
+}
+@keyframes today-task-pop {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+@keyframes today-task-tick-in {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
 }
 .today-task-body { flex: 1; min-width: 0; }
 .today-task-title {
@@ -1024,92 +1074,6 @@ input::placeholder, textarea::placeholder { color: var(--text-ter); }
 .theme-toggle svg { width: 15px; height: 15px; }
 
 /* ============================================================
-   CONVERSION FUNNEL — three-stage horizontal pipeline-leak view.
-   Lives at the bottom of the header. Each stage shows a count + label;
-   between stages, a conversion rate (% of previous stage that
-   progressed) gives an at-a-glance signal of where the pipeline leaks.
-   ============================================================ */
-.conv-funnel {
-  display: inline-flex;
-  align-items: center;
-  gap: 0;
-  padding: 6px 0 2px;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-}
-/* Subtitle row: just the funnel, no other inline elements. */
-.subtitle-funnel-row {
-  display: flex !important;
-  align-items: center;
-  padding-top: 4px;
-}
-.conv-stage {
-  display: inline-flex;
-  flex-direction: row;
-  align-items: baseline;
-  gap: 6px;
-  padding: 0;
-  position: relative;
-  min-width: 0;
-}
-.conv-stage-num {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 15px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-  line-height: 1;
-  color: var(--text);
-}
-.conv-stage-label {
-  font-size: 11.5px;
-  font-weight: 500;
-  color: var(--text-sec);
-  letter-spacing: -0.005em;
-  line-height: 1;
-}
-.conv-arrow {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 5px;
-  flex: 0 0 auto;
-  padding: 0 14px;
-  min-width: 0;
-}
-.conv-arrow-rate {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 11.5px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
-  line-height: 1;
-  color: var(--text-sec);
-  padding: 2px 6px;
-  border-radius: var(--r-sm);
-  background: var(--bg-secondary);
-}
-.conv-arrow-rate.weak  { color: var(--danger-text);  background: var(--danger-soft); }
-.conv-arrow-rate.mid   { color: var(--warning-text); background: var(--warning-soft); }
-.conv-arrow-rate.good  { color: var(--success-text); background: var(--success-soft); }
-.conv-arrow-glyph {
-  color: var(--text-ter);
-  font-size: 10px;
-  line-height: 1;
-  opacity: 0.5;
-  user-select: none;
-}
-.conv-arrow-label {
-  display: none;
-}
-@media (max-width: 820px) {
-  .conv-funnel { padding: 4px 0; }
-  .conv-stage-num { font-size: 14px; }
-  .conv-arrow { padding: 0 8px; }
-}
-
-/* ============================================================
    QUEUE STRIP
    ============================================================ */
 
@@ -1211,6 +1175,54 @@ input::placeholder, textarea::placeholder { color: var(--text-ter); }
 }
 .sort-menu-item:hover { background: var(--bg); color: var(--text); }
 .sort-menu-item.active { background: var(--accent-soft); color: var(--accent-text); font-weight: 600; }
+
+/* Outcome popover — unified replacement for Hold dropdown + Log outcome dropdown + Archive button.
+   Uses position: fixed with JS-set coords so it escapes any parent overflow:hidden / clipping. */
+.outcome-trigger { display: inline-flex; align-items: center; gap: 5px; }
+.outcome-popover {
+  position: fixed;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  box-shadow: 0 8px 24px rgba(28,28,28,0.12);
+  z-index: 1000;
+  min-width: 200px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  animation: header-menu-slide 0.15s var(--ease);
+}
+[data-theme="dark"] .outcome-popover { box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+.outcome-popover-section { display: flex; flex-direction: column; padding: 4px 0; }
+.outcome-popover-section + .outcome-popover-section { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 8px; }
+.outcome-popover-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-ter);
+  font-weight: 600;
+  padding: 4px 12px 6px;
+  margin: 0;
+}
+.outcome-popover-item {
+  background: transparent;
+  border: none;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--r-sm);
+  font-family: inherit;
+  transition: background var(--duration-fast) var(--ease);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.outcome-popover-item:hover { background: var(--bg); }
+.outcome-popover-item.danger { color: var(--danger-text); }
+.outcome-popover-item.danger:hover { background: var(--danger-soft); }
+.outcome-popover-backdrop { position: fixed; inset: 0; z-index: 999; background: transparent; }
 .column-cards { display: flex; flex-direction: column; gap: 8px; }
 
 /* COLUMN LANE TINTS — soft 4-6% opacity wash behind each column so the
@@ -1235,8 +1247,8 @@ input::placeholder, textarea::placeholder { color: var(--text-ter); }
 .column.column-potential,
 .column.column-applied,
 .column.column-engagement {
-  padding: 12px 12px 14px;
-  margin: 0;
+  padding: 12px 10px 14px;
+  margin: 0 -10px;
   border-radius: var(--r-md);
   position: relative;
   transition: background var(--duration-fast) var(--ease);
@@ -1784,7 +1796,6 @@ input::placeholder, textarea::placeholder { color: var(--text-ter); }
   pointer-events: none;
   z-index: 2;
   color: white;
-  white-space: nowrap;
 }
 /* Folded-corner triangle sitting below the ribbon — creates the classic
    "banner wrapped around the card corner" look. */
@@ -1805,7 +1816,28 @@ input::placeholder, textarea::placeholder { color: var(--text-ter); }
   line-height: 1;
 }
 .card-ribbon-icon svg { width: 10px; height: 10px; display: block; }
-svg.card-ribbon-icon { width: 10px; height: 10px; display: inline-block; flex-shrink: 0; }
+/* Stale ribbon icon: slow gentle wobble to draw the eye without being
+   annoying. Period of 2.4s + 60% idle time means it pulses briefly then
+   sits still — eye-catching once, ignorable after. */
+.card-ribbon-stale .card-ribbon-icon {
+  animation: ribbon-icon-wobble 2.4s ease-in-out infinite;
+}
+@keyframes ribbon-icon-wobble {
+  0%, 60%, 100% { transform: rotate(0deg); }
+  70%           { transform: rotate(-12deg); }
+  80%           { transform: rotate(8deg); }
+  90%           { transform: rotate(-4deg); }
+}
+/* Follow-up ribbon icon: gentle pulse so the bell catches attention.
+   Same idle-then-pulse rhythm so the page doesn\'t feel busy. */
+.card-ribbon-followup .card-ribbon-icon {
+  animation: ribbon-icon-pulse 2.4s ease-in-out infinite;
+}
+@keyframes ribbon-icon-pulse {
+  0%, 60%, 100% { transform: scale(1); }
+  70%           { transform: scale(1.18); }
+  85%           { transform: scale(0.95); }
+}
 .card-ribbon-text {
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -1920,35 +1952,9 @@ svg.card-ribbon-icon { width: 10px; height: 10px; display: inline-block; flex-sh
   background: var(--bg-inset);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
-  transition: opacity var(--duration-fast) var(--ease), border-color var(--duration-fast) var(--ease), background var(--duration-fast) var(--ease);
 }
 .journey-edit-row:hover {
   border-color: var(--border-hover);
-}
-/* Drag handle. Cursor changes to grab so it's discoverable. */
-.journey-edit-handle {
-  flex-shrink: 0;
-  cursor: grab;
-  color: var(--text-ter);
-  font-size: 14px;
-  line-height: 1;
-  padding: 4px 2px;
-  user-select: none;
-  letter-spacing: -2px;
-}
-.journey-edit-handle:hover { color: var(--text-sec); }
-.journey-edit-handle:active { cursor: grabbing; }
-/* Active drag state — row being moved fades and lifts */
-.journey-edit-row.dragging {
-  opacity: 0.4;
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-/* Drop target indicator — a row that's being hovered over while dragging
-   gets a top border accent so the user sees where the drop will land. */
-.journey-edit-row.drop-target {
-  border-top: 2px solid var(--accent);
-  padding-top: 7px;  /* compensate for the 1px border becoming 2px */
 }
 .journey-edit-index {
   font-size: 11px;
@@ -1975,33 +1981,6 @@ svg.card-ribbon-icon { width: 10px; height: 10px; display: inline-block; flex-sh
   background: var(--danger-soft);
   border-color: var(--danger);
 }
-/* Out-of-order warning callout in the editor */
-.journey-edit-warning {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  margin-bottom: 12px;
-  background: var(--warning-soft);
-  border: 1px solid var(--warning);
-  border-radius: var(--r-md);
-  color: var(--warning-text);
-  font-size: 12.5px;
-  font-weight: 500;
-  letter-spacing: -0.005em;
-}
-.journey-edit-warning button {
-  margin-left: auto;
-  background: var(--warning);
-  color: white;
-  border: none;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 5px 10px;
-  border-radius: var(--r-sm);
-  cursor: pointer;
-}
-.journey-edit-warning button:hover { filter: brightness(1.05); }
 @media (max-width: 680px) {
   .journey-edit-row {
     flex-wrap: wrap;
@@ -2365,12 +2344,45 @@ input.search-input::placeholder { color: var(--text-ter); }
 .tile { background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 14px; }
 .tile-label { font-size: 10.5px; color: var(--text-ter); margin: 0 0 5px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
 .tile-value { font-size: 13px; margin: 0; line-height: 1.55; color: var(--text); font-weight: 500; }
+.tile.clickable { cursor: pointer; transition: transform var(--duration-fast) var(--ease), box-shadow var(--duration-fast) var(--ease); position: relative; }
+.tile.clickable:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+.tile.clickable:active { transform: translateY(0); }
+.tile-hint { position: absolute; top: 10px; right: 12px; font-size: 11px; color: var(--text-ter); opacity: 0.7; }
+.tile.clickable:hover .tile-hint { opacity: 1; }
+
+/* Doc viewer modal — shows markdown content as preformatted text */
+.doc-viewer-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); padding: 0 28px; background: var(--bg-secondary); }
+.doc-viewer-tab { background: transparent; border: none; padding: 12px 16px; font-size: 13px; color: var(--text-sec); cursor: pointer; font-family: inherit; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all var(--duration-fast) var(--ease); }
+.doc-viewer-tab:hover { color: var(--text); }
+.doc-viewer-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.doc-viewer-tab:disabled { color: var(--text-ter); cursor: not-allowed; opacity: 0.5; }
+.doc-viewer-tab:disabled:hover { color: var(--text-ter); }
+.doc-md-pane { padding: 20px 28px; max-height: 65vh; overflow-y: auto; background: var(--bg); }
+.doc-md-content { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; font-size: 14px; line-height: 1.7; color: var(--text); white-space: pre-wrap; word-wrap: break-word; margin: 0; }
 
 /* TABS */
-.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 22px; }
-.tab { background: transparent; border: none; padding: 10px 14px 12px; color: var(--text-sec); border-bottom: 2px solid transparent; border-radius: 0; font-size: 13px; font-weight: 500; cursor: pointer; margin-bottom: -1px; transition: color var(--duration-fast) var(--ease), border-color var(--duration-fast) var(--ease); letter-spacing: -0.005em; }
-.tab:hover { background: transparent; color: var(--text); border-color: transparent; }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 22px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.tab { background: transparent; border: none; padding: 10px 14px 12px; color: var(--text-sec); border-bottom: 2px solid transparent; border-radius: 0; font-size: 13px; font-weight: 500; cursor: pointer; margin-bottom: -1px; transition: color var(--duration-fast) var(--ease), border-color var(--duration-fast) var(--ease); letter-spacing: -0.005em; white-space: nowrap; flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px; }
+.tab:hover:not(.locked) { background: transparent; color: var(--text); border-color: transparent; }
 .tab.active { color: var(--text); border-bottom-color: var(--text); font-weight: 600; }
+/* Locked tabs: muted, non-interactive feel, with a small lock glyph.
+   Click handler still fires (to show toast on mobile), but cursor + colour
+   communicate "you can\'t go here yet". */
+.tab.locked {
+  color: var(--text-ter);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.tab.locked:hover {
+  color: var(--text-ter);
+  background: transparent;
+}
+.tab-lock {
+  font-size: 9.5px;
+  opacity: 0.7;
+  display: inline-block;
+  margin-left: 1px;
+}
 
 .section-title { font-size: 10.5px; font-weight: 600; color: var(--text-ter); margin: 0 0 14px; text-transform: uppercase; letter-spacing: 0.08em; }
 
@@ -2421,78 +2433,6 @@ input.search-input::placeholder { color: var(--text-ter); }
 .ans-block { border-radius: var(--r-md); padding: 12px 14px; margin-bottom: 10px; font-size: 13.5px; line-height: 1.65; }
 .ans-label { font-size: 10.5px; font-weight: 700; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.06em; }
 .q-actions { display: flex; gap: 6px; padding-top: 12px; border-top: 1px solid var(--border); margin-top: 8px; flex-wrap: wrap; }
-
-/* PREPARED-ANSWER FORMAT TOGGLE */
-.prep-format-tabs { display: inline-flex; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--r-full); padding: 2px; gap: 0; margin-bottom: 8px; }
-.prep-format-tab { font-size: 11.5px; padding: 4px 12px; border-radius: var(--r-full); border: none; background: transparent; color: var(--text-sec); cursor: pointer; font-weight: 500; transition: all var(--duration-fast) var(--ease); letter-spacing: -0.005em; }
-.prep-format-tab:hover { background: transparent; color: var(--text); }
-.prep-format-tab.active { background: var(--bg-elevated); color: var(--text); box-shadow: var(--shadow-xs); font-weight: 600; }
-
-/* ROUND SCORE PILL */
-.score-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: var(--r-full); font-variant-numeric: tabular-nums; cursor: pointer; transition: all var(--duration-fast) var(--ease); border: 1px solid transparent; user-select: none; line-height: 1.4; }
-.score-pill:hover { filter: brightness(0.97); }
-.score-pill.high { background: var(--success-soft); color: var(--success-text); border-color: var(--success); }
-.score-pill.mid  { background: var(--warning-soft); color: var(--warning-text); border-color: var(--warning); }
-.score-pill.low  { background: var(--danger-soft);  color: var(--danger-text);  border-color: var(--danger); }
-.score-pill.none { background: var(--bg-secondary); color: var(--text-ter); border-color: var(--border); }
-.score-pill input { width: 36px; padding: 0 4px; font-size: 11.5px; font-weight: 700; text-align: center; border: none; background: transparent; color: inherit; font-family: inherit; outline: none; font-variant-numeric: tabular-nums; }
-.score-pill input::-webkit-outer-spin-button, .score-pill input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-
-/* PREPAREDNESS SCORE — sits to the LEFT of the Practice session container */
-.prep-score-block { display: flex; flex-direction: column; align-items: center; gap: 4px; flex-shrink: 0; padding-right: 14px; margin-right: 14px; border-right: 1px solid var(--border); }
-.prep-score-block .fit-circle { margin: 0; }
-.prep-score-block .prep-score-label { font-size: 10px; font-weight: 700; color: var(--text-ter); text-transform: uppercase; letter-spacing: 0.08em; margin: 0; }
-.practice-header-with-score { display: flex; align-items: stretch; gap: 0; }
-.practice-header-with-score .practice-header { flex: 1; }
-
-/* JOURNEY ACTION CLUSTER */
-.journey-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-.journey-actions-secondary { display: flex; gap: 4px; align-items: center; }
-.journey-actions-sep { color: var(--text-ter); font-size: 11px; opacity: 0.5; }
-
-/* DROPDOWN MENUS (used for Job Ad and Action area) */
-.dd-menu { position: relative; display: inline-block; }
-.dd-menu-list {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  min-width: 180px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r-md);
-  box-shadow: var(--shadow-lg);
-  z-index: 50;
-  padding: 4px;
-  display: none;
-}
-.dd-menu.open .dd-menu-list { display: block; }
-/* Drop-up variant: when a dropdown lives in the modal footer, open
-   upward so it doesn't get clipped by the modal's overflow:hidden. */
-.modal-footer .dd-menu .dd-menu-list,
-.dd-menu.dd-up .dd-menu-list {
-  top: auto;
-  bottom: calc(100% + 4px);
-}
-.dd-menu-item {
-  display: block;
-  width: 100%;
-  text-align: left;
-  background: transparent;
-  border: none;
-  padding: 8px 12px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text);
-  border-radius: var(--r-sm);
-  cursor: pointer;
-  white-space: nowrap;
-  letter-spacing: -0.005em;
-}
-.dd-menu-item:hover { background: var(--bg-secondary); }
-.dd-menu-item.danger { color: var(--danger-text); }
-.dd-menu-item.danger:hover { background: var(--danger-soft); }
-.dd-menu-divider { height: 1px; background: var(--border); margin: 4px 0; }
-.dd-menu-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-ter); padding: 6px 12px 4px; font-weight: 600; }
 
 /* NOTES TAB */
 .notes-compose {
@@ -2617,31 +2557,6 @@ input.search-input::placeholder { color: var(--text-ter); }
 [data-theme="dark"] .modal-overlay { background: rgba(0, 0, 0, 0.65); }
 @keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
 
-/* Back-modal layers (when a modal is opened on top of another). The
-   layer itself has no backdrop (the front layer already darkens
-   everything below). The .modal inside is scaled down and dimmed,
-   with a pointer cursor to signal "click to bring back". The whole
-   layer is click-targetable so clicking anywhere — modal or empty
-   space — raises this layer. */
-.modal-overlay.is-back {
-  background: transparent;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  cursor: pointer;
-  animation: none;
-}
-.modal-overlay.is-back .modal {
-  opacity: 0.55;
-  transform: scale(0.96);
-  pointer-events: none;  /* ignore clicks on inner controls */
-  filter: saturate(0.7);
-  transition: opacity var(--duration-fast) var(--ease), transform var(--duration-fast) var(--ease);
-}
-.modal-overlay.is-back:hover .modal {
-  opacity: 0.7;
-  transform: scale(0.97);
-}
-
 .modal { background: var(--bg-elevated); border-radius: var(--r-lg); width: 100%; max-width: 560px; border: 1px solid var(--border); overflow: hidden; margin: auto; box-shadow: var(--shadow-xl); animation: modalIn 260ms var(--ease-out); position: relative; }
 @keyframes modalIn {
   from { opacity: 0; transform: translateY(12px) scale(0.985); }
@@ -2655,10 +2570,10 @@ input.search-input::placeholder { color: var(--text-ter); }
 .modal.detail-modal.stage-2::before { background: linear-gradient(to right, var(--teal), var(--teal) 60%, transparent); }
 .modal.detail-modal.stage-3::before { background: linear-gradient(to right, var(--accent), var(--accent) 60%, transparent); }
 .modal.detail-modal .modal-header { border-bottom: 1px solid var(--border); padding-bottom: 22px; }
-.modal.detail-modal .modal-body { max-height: 62vh; overflow-y: auto; padding-top: 14px; }
+.modal.detail-modal .modal-body { max-height: 62vh; overflow-y: auto; }
 .modal.detail-modal .modal-footer { flex-wrap: wrap; gap: 10px; }
 
-.detail-modal-header { display: flex; align-items: flex-start; gap: 18px; padding: 28px 28px 12px; }
+.detail-modal-header { display: flex; align-items: flex-start; gap: 18px; padding: 28px 28px 22px; }
 .detail-header-info { flex: 1; min-width: 0; }
 .detail-header-fit { flex-shrink: 0; text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; padding-top: 2px; }
 .detail-modal-header .modal-close { flex-shrink: 0; margin-top: -4px; }
@@ -2823,6 +2738,66 @@ input.search-input::placeholder { color: var(--text-ter); }
 .toast.success { background: var(--success); color: #FFFFFF; }
 .toast.error   { background: var(--danger); color: #FFFFFF; }
 
+/* Apply prompt — persistent two-button toast that appears after clicking
+   "Apply to job ad". Sits above regular toasts so they don't collide. */
+.apply-prompt {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translate(-50%, 16px);
+  background: var(--text);
+  color: var(--bg-elevated);
+  padding: 14px 18px 14px 20px;
+  border-radius: var(--r-md);
+  font-size: 13.5px;
+  font-weight: 500;
+  z-index: 10001;
+  opacity: 0;
+  transition: all 260ms var(--ease-out);
+  box-shadow: var(--shadow-lg);
+  letter-spacing: -0.005em;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: calc(100vw - 32px);
+}
+.apply-prompt.visible { opacity: 1; transform: translate(-50%, 0); }
+.apply-prompt-text { line-height: 1.4; }
+.apply-prompt-text strong { display: block; font-weight: 600; margin-bottom: 2px; }
+.apply-prompt-text span { font-size: 12px; opacity: 0.75; font-weight: 400; }
+.apply-prompt-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.apply-prompt-btn {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.25);
+  color: var(--bg-elevated);
+  padding: 6px 12px;
+  border-radius: var(--r-sm);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all var(--duration-fast) var(--ease);
+}
+.apply-prompt-btn:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.4); }
+.apply-prompt-btn.primary { background: var(--accent); border-color: var(--accent); color: #FFFFFF; }
+.apply-prompt-btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.apply-prompt-close {
+  background: transparent;
+  border: none;
+  color: var(--bg-elevated);
+  opacity: 0.5;
+  cursor: pointer;
+  padding: 4px 6px;
+  font-size: 16px;
+  line-height: 1;
+  border-radius: var(--r-sm);
+}
+.apply-prompt-close:hover { opacity: 1; background: rgba(255,255,255,0.08); }
+@media (max-width: 600px) {
+  .apply-prompt { flex-direction: column; align-items: stretch; gap: 10px; padding: 14px 16px; }
+  .apply-prompt-actions { justify-content: flex-end; }
+}
+
 .empty-state { text-align: center; padding: 48px 24px; color: var(--text-sec); font-size: 13.5px; }
 .empty-state p { margin-bottom: 16px; }
 .loading { text-align: center; padding: 96px 24px; color: var(--text-sec); font-size: 14px; font-weight: 500; }
@@ -2871,7 +2846,7 @@ input.search-input::placeholder { color: var(--text-ter); }
   /* Column lane tints — narrower margins at tablet widths */
   .column.column-potential,
   .column.column-applied,
-  .column.column-engagement { margin: 0; padding: 12px 10px; }
+  .column.column-engagement { margin: 0 -6px; padding: 12px 8px; }
   /* Ready-to-apply bar and batch toolbar stack cleaner at narrow widths */
   .ready-bar { gap: 10px; padding: 10px 12px; }
   .ready-bar-cards { width: 100%; }
@@ -2886,9 +2861,9 @@ input.search-input::placeholder { color: var(--text-ter); }
   .modal { max-width: 100%; }
   .modal.wide, .modal.detail-modal { max-width: 100%; }
   .modal-overlay { padding: 24px 12px; }
-  .detail-modal-header { padding: 20px 18px 10px; gap: 12px; }
+  .detail-modal-header { padding: 20px 18px 16px; gap: 12px; }
   .modal-body, .modal-footer { padding-left: 18px; padding-right: 18px; }
-  .modal.detail-modal .modal-body { max-height: none; padding-top: 12px; }
+  .modal.detail-modal .modal-body { max-height: none; }
   .gdoc-embed { height: 380px; }
 }
 
@@ -3042,7 +3017,9 @@ input.search-input::placeholder { color: var(--text-ter); }
 </div>
 
 <div id="modal-root"></div>
+<div id="popover-root"></div>
 <div id="save-indicator-root"></div>
+<div id="apply-prompt-root"></div>
 <div id="toast-root"></div>
 
 <script>
@@ -3076,16 +3053,17 @@ const state = {
   archiveExpanded: false,
   modalOpen: null,
   modalData: {},
-  /* Stack of open modals. Each entry: { which, data }. The top of the
-     stack is the active modal; lower entries render behind, dimmed, and
-     can be clicked to raise (which pops everything above). modalOpen and
-     modalData mirror the top of the stack for backward compat with the
-     43+ sites that read those directly. */
-  modalStack: [],
   filterPrep: 'all',
   search: '',
   editJourneyDraft: null,
   batchJourneyDraft: null,
+  // Outcome popover: { rowId, x, y } when open, null when closed.
+  // Lives outside modal state because it can open from the journey row inside the detail modal too.
+  outcomePopover: null,
+  // Apply prompt: { rowId } when active, null when dismissed.
+  // Triggered when user clicks "Apply to job ad" so they can mark applied
+  // without hunting for the footer button after coming back from the ad.
+  applyPrompt: null,
   statsTab: 'applied',
   columnTabs: {},
   // Mobile-only: which of the three columns is currently visible. Controlled
@@ -3164,6 +3142,47 @@ function displayFitScore(score) {
   if (isNaN(n) || n <= 0) return '';
   const s = n > 10 ? n / 10 : n;
   return String(Math.round(s));
+}
+
+/**
+ * Build a plain-text tooltip explaining why a card has its fit score.
+ * Pulls from key alignments, potential concerns, and tailored pitch.
+ * Native browser tooltips don\'t support formatting, so we use newlines
+ * and simple labels — works on hover, no extra DOM cost.
+ *
+ * Falls back to a generic "no analysis yet" message when the card hasn\'t
+ * been analysed (rare — usually scored cards have all this).
+ */
+function buildFitScoreTooltip(row) {
+  const score = displayFitScore(row.fitScore);
+  if (!score) return 'Not yet analysed';
+
+  const lines = ['Fit score: ' + score + '/10'];
+
+  if (isPresent(row.keyAlignments)) {
+    const aligns = String(row.keyAlignments).split(/\s*\|\s*/).filter(Boolean);
+    if (aligns.length) {
+      lines.push('');
+      lines.push('Why it fits:');
+      aligns.slice(0, 4).forEach(function (a) { lines.push('  + ' + a); });
+    }
+  }
+
+  if (isPresent(row.potentialConcerns)) {
+    const concerns = String(row.potentialConcerns).split(/\s*\|\s*/).filter(Boolean);
+    if (concerns.length) {
+      lines.push('');
+      lines.push('Concerns:');
+      concerns.slice(0, 3).forEach(function (c) { lines.push('  − ' + c); });
+    }
+  }
+
+  if (isPresent(row.tailoredPitch)) {
+    lines.push('');
+    lines.push('Pitch: ' + truncate(row.tailoredPitch, 160));
+  }
+
+  return lines.join('\n');
 }
 
 function fitColorVar(score) {
@@ -3409,6 +3428,84 @@ function render() {
     renderArchive() +
     renderMobileTabBar();
   renderModal();
+  renderPopovers();
+  renderApplyPrompt();
+}
+
+function renderPopovers() {
+  const root = document.getElementById('popover-root');
+  if (!root) return;
+  root.innerHTML = renderOutcomePopover();
+}
+
+function renderApplyPrompt() {
+  const root = document.getElementById('apply-prompt-root');
+  if (!root) return;
+  if (!state.applyPrompt) {
+    // Animate out, then clear
+    const existing = root.querySelector('.apply-prompt');
+    if (existing) {
+      existing.classList.remove('visible');
+      setTimeout(function () { if (root) root.innerHTML = ''; }, 300);
+    }
+    return;
+  }
+  const row = state.pipeline.find(function (r) { return r.rowId === state.applyPrompt.rowId; });
+  if (!row) { state.applyPrompt = null; root.innerHTML = ''; return; }
+  // Auto-dismiss if the card is no longer in Ready to Apply (user marked it
+  // applied through another path, or moved/archived the card)
+  if (row.status !== 'Ready to Apply') {
+    state.applyPrompt = null;
+    const existing = root.querySelector('.apply-prompt');
+    if (existing) {
+      existing.classList.remove('visible');
+      setTimeout(function () { if (root) root.innerHTML = ''; }, 300);
+    } else {
+      root.innerHTML = '';
+    }
+    return;
+  }
+
+  // If already in there, don't rebuild — preserves the entrance animation
+  const existing = root.querySelector('.apply-prompt');
+  if (existing && existing.dataset.rowId === String(row.rowId)) return;
+
+  root.innerHTML = (
+    '<div class="apply-prompt" data-row-id="' + row.rowId + '" role="dialog" aria-live="polite">' +
+      '<div class="apply-prompt-text">' +
+        '<strong>Did you submit your application?</strong>' +
+        '<span>' + escapeHtml(row.role) + ' · ' + escapeHtml(row.company) + '</span>' +
+      '</div>' +
+      '<div class="apply-prompt-actions">' +
+        '<button class="apply-prompt-btn" onclick="dismissApplyPrompt()">Not yet</button>' +
+        '<button class="apply-prompt-btn primary" onclick="confirmApplyPrompt()">Mark as applied</button>' +
+      '</div>' +
+      '<button class="apply-prompt-close" onclick="dismissApplyPrompt()" aria-label="Dismiss">✕</button>' +
+    '</div>'
+  );
+  const el = root.querySelector('.apply-prompt');
+  requestAnimationFrame(function () { if (el) el.classList.add('visible'); });
+}
+
+function openJobAdAndPromptApply(rowId, url) {
+  if (!url) { toast('No URL for this job', 'error'); return; }
+  window.open(url, '_blank', 'noopener');
+  // Show the prompt immediately so it's waiting when the user switches back
+  state.applyPrompt = { rowId: rowId };
+  renderApplyPrompt();
+}
+
+function dismissApplyPrompt() {
+  state.applyPrompt = null;
+  renderApplyPrompt();
+}
+
+function confirmApplyPrompt() {
+  if (!state.applyPrompt) return;
+  const rowId = state.applyPrompt.rowId;
+  state.applyPrompt = null;
+  renderApplyPrompt();
+  openModal('markAsApplied', { rowId: rowId });
 }
 
 /**
@@ -3595,7 +3692,6 @@ async function runBatch() {
 
 function renderHeader() {
   const counts = countByColumn();
-  const prospects = countProspects();
   const archivedCount = state.pipeline.filter(function (r) {
     if (r.status === 'Withdrawn') return true;
     if (r.status === 'Rejected' && !rejectedReachedInterview(r)) return true;
@@ -3769,8 +3865,12 @@ function renderHeader() {
             '</div>' +
             '<div class="brand-text">' +
               '<h1 class="header-title">Louie Radburnd<span class="brand-dot">.</span> <span class="brand-suffix">Pipeline</span></h1>' +
-              '<div class="header-subtitle subtitle-funnel-row">' +
-                renderConversionFunnel() +
+              '<div class="header-subtitle">' +
+                '<span><b>' + counts.active + '</b> Active</span>' +
+                '<span class="subtitle-sep">·</span>' +
+                '<span><b>' + counts.engaged + '</b> Engaged</span>' +
+                '<span class="subtitle-sep">·</span>' +
+                '<span class="avg-fit-inline" style="color:' + fitColorVar(avgFitNum) + ';">Avg fit ' + avgFit + '</span>' +
               '</div>' +
             '</div>' +
           '</div>' +
@@ -3783,6 +3883,10 @@ function renderHeader() {
           '<div class="header-actions">' +
             renderTodayPill() +
             '<button class="accent header-add-btn" onclick="openModal(\'intake\')">+ Add jobs</button>' +
+            '<button class="header-dev-btn" onclick="copyDevPrompt()" title="Copy a prompt to start a new tech-update chat in this project" aria-label="Copy dev prompt">' +
+              '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>' +
+              '<span>Dev</span>' +
+            '</button>' +
             '<button class="header-burger" onclick="toggleHeaderMenu()" title="More options" aria-label="More options" aria-expanded="' + (state.headerMenuOpen ? 'true' : 'false') + '">' +
               '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>' +
             '</button>' +
@@ -3970,9 +4074,9 @@ function isFollowUpDue(row) {
  * first is more intuitive as a "forward" funnel). "All" always first.
  */
 const COLUMN_TABS = {
-  'Potential':  ['Ready to Apply', 'Analysed', 'Sourced'],
-  'Applied':    ['Recent', 'Follow up', 'Ghosted'],
-  'Engagement': ['Interviewing', 'Interviewed', 'Offer', 'Rejected']
+  'Potential':  ['All', 'Ready to Apply', 'Analysed', 'Sourced'],
+  'Applied':    ['All', 'Recent', 'Follow up', 'Ghosted'],
+  'Engagement': ['All', 'Interviewing', 'Interviewed', 'Offer', 'Rejected']
 };
 
 /**
@@ -4378,9 +4482,10 @@ function renderCard(row) {
 
   // Card fit circle: storage is 0–100 but the circle shows 0–10 display form.
   const fitDisplay = displayFitScore(row.fitScore);
+  const fitTooltip = buildFitScoreTooltip(row);
   const fitBadge = fitDisplay
-    ? '<div class="fit-circle ' + fitClass(row.fitScore) + '">' + fitDisplay + '</div>'
-    : '<div class="fit-circle" style="border-color:var(--border-strong);color:var(--text-ter);background:var(--bg-secondary);">·</div>';
+    ? '<div class="fit-circle ' + fitClass(row.fitScore) + '" title="' + escapeAttr(fitTooltip) + '">' + fitDisplay + '</div>'
+    : '<div class="fit-circle" title="' + escapeAttr(fitTooltip) + '" style="border-color:var(--border-strong);color:var(--text-ter);background:var(--bg-secondary);">·</div>';
 
   const clickHandler = inBatch
     ? (isEligible ? 'toggleCardSelection(' + row.rowId + ')' : 'toast(\'This card is not eligible for the current batch action\', \'info\')')
@@ -4413,10 +4518,11 @@ function renderCard(row) {
  * Only renders when there\'s something noteworthy to signal — most cards
  * get nothing. Priority order:
  *   1. Needs follow-up (Applied >FOLLOW_UP_DAYS old) — amber
- *   2. Stale in stage (Sourced/Analysed/Ready to Apply sitting too long) — amber
- *   3. Touched today (lastActivity === today) — green
- * Follow-up/stale win because they\'re actionable. Touched-today is
- * celebratory but not urgent, so it yields.
+ *   2. Stale in stage (Sourced/Analysed/Ready to Apply sitting too long) — slate
+ * Both are actionable. Touched-today was previously rendered as a green
+ * ribbon here but kept breaking on narrow cards (text wrapping vertically),
+ * and it duplicated info already shown in the detail modal header. Removed
+ * because it was passive ("you did something") rather than actionable.
  */
 function cardRibbon(row, followUpDue) {
   if (followUpDue) {
@@ -4444,17 +4550,6 @@ function cardRibbon(row, followUpDue) {
         '</div>'
       );
     }
-  }
-  const touched = daysSince(row.lastActivity);
-  if (touched === 0) {
-    return (
-      '<div class="card-ribbon card-ribbon-touched" title="Touched today">' +
-        '<svg class="card-ribbon-icon" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">' +
-          '<path d="M2.5 6.5L5 9L9.5 3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
-        '</svg>' +
-        '<span class="card-ribbon-text">Today</span>' +
-      '</div>'
-    );
   }
   return '';
 }
@@ -4649,25 +4744,142 @@ function renderArchive() {
    DETAIL BODIES
    ============================================================ */
 
-function renderStage1DetailBody(row) {
-  const tab = state.selectedTab || 'intelligence';
-  // Stage 1 now has a small tab bar too so Notes is reachable
-  const tabBar =
-    '<div class="tabs">' +
-      '<button class="tab ' + (tab === 'intelligence' ? 'active' : '') + '" onclick="setTab(\'intelligence\')">Intelligence</button>' +
-      '<button class="tab ' + (tab === 'notes' ? 'active' : '') + '" onclick="setTab(\'notes\')">Notes</button>' +
-    '</div>';
-  const tabBody = tab === 'notes'
-    ? renderNotesTabBody(row)
-    : renderIntelligenceTabBody(row);
+/**
+ * Tab definitions for the unified card detail modal. Same 5 tabs render
+ * for every card stage. Each tab declares an `unlockedWhen` predicate
+ * that determines whether the user can click into it — locked tabs show
+ * a lock icon + tooltip explaining what unlocks them.
+ *
+ * Order matters: this is the rendering order left-to-right.
+ *
+ * Note: Follow-up tab will be added in Deploy B once the schema and tab
+ * body exist. For now: Intelligence | Docs | Submitted docs | Interview prep | Notes.
+ */
+const DETAIL_TABS = [
+  {
+    id: 'intelligence',
+    label: 'Intelligence',
+    unlockedWhen: function () { return true; },
+    lockReason: ''
+  },
+  {
+    id: 'docs',
+    label: 'Docs',
+    unlockedWhen: function (row) {
+      // Docs available from Analysed onward — pre-Analysed (Sourced) shouldn\'t generate docs yet
+      return row.status !== 'Sourced';
+    },
+    lockReason: 'Available after the card is analysed'
+  },
+  {
+    id: 'submittedDocs',
+    label: 'Submitted docs',
+    unlockedWhen: function (row) {
+      // Submitted docs only meaningful once you\'ve actually applied
+      return hasBeenApplied(row);
+    },
+    lockReason: 'Available after you mark this card as Applied'
+  },
+  {
+    id: 'interviewPrep',
+    label: 'Interview prep',
+    unlockedWhen: function (row) {
+      return hasBeenApplied(row);
+    },
+    lockReason: 'Available after you mark this card as Applied'
+  },
+  {
+    id: 'notes',
+    label: 'Notes',
+    unlockedWhen: function () { return true; },
+    lockReason: ''
+  }
+];
 
+/**
+ * Pick the default tab to show when a card detail modal first opens.
+ * Implements the "next-action" routing logic from the plan: each stage
+ * gets pointed at the tab that represents the next thing to do.
+ */
+function getDefaultTabForRow(row) {
+  // Card already has a selected tab? Honour it (user navigated there)
+  if (state.selectedTab) {
+    // But ONLY if it\'s unlocked for this card — otherwise fall through to default
+    const tab = DETAIL_TABS.find(function (t) { return t.id === state.selectedTab; });
+    if (tab && tab.unlockedWhen(row)) return state.selectedTab;
+  }
+
+  const status = row.status;
+  if (status === 'Sourced')                                            return 'intelligence';
+  if (status === 'Analysed')                                           return 'docs';
+  if (status === 'Ready to Apply')                                     return 'docs';
+
+  // Applied: split by age bucket (recent vs follow-up due vs ghosted)
+  if (status === 'Applied') {
+    const days = daysSince(row.applicationDate);
+    // Follow-up tab will live here in Deploy B; for now point at Interview prep
+    // for recent and Notes for ghosted (so user can record a lesson learned)
+    if (days !== null && days > 21) return 'notes';
+    return 'interviewPrep';
+  }
+
+  if (['Interviewing', 'Interviewed', 'Offer'].indexOf(status) > -1) return 'interviewPrep';
+  if (['Accepted', 'Rejected', 'Withdrawn'].indexOf(status) > -1)    return 'notes';
+  if (isHoldingStatus(status))                                      return 'intelligence';
+
+  return 'intelligence';
+}
+
+/**
+ * Render the unified 5-tab bar. Locked tabs are visually muted with a
+ * lock glyph and don\'t respond to clicks (instead show a toast on tap
+ * for mobile users who can\'t hover for the tooltip).
+ */
+function renderUnifiedTabBar(row, activeTab) {
+  return '<div class="tabs">' +
+    DETAIL_TABS.map(function (t) {
+      const unlocked = t.unlockedWhen(row);
+      const isActive = unlocked && t.id === activeTab;
+      const cls = 'tab' + (isActive ? ' active' : '') + (unlocked ? '' : ' locked');
+      const handler = unlocked
+        ? 'setTab(\'' + t.id + '\')'
+        : 'showLockedTabReason(\'' + escapeAttr(t.lockReason) + '\')';
+      const lockGlyph = unlocked ? '' : ' <span class="tab-lock" aria-hidden="true">🔒</span>';
+      const titleAttr = unlocked ? '' : ' title="' + escapeAttr(t.lockReason) + '"';
+      return '<button class="' + cls + '"' + titleAttr + ' onclick="' + handler + '">' + t.label + lockGlyph + '</button>';
+    }).join('') +
+  '</div>';
+}
+
+function showLockedTabReason(reason) {
+  toast(reason || 'This tab is locked', 'info');
+}
+
+/**
+ * Render the body for whichever tab is active. Centralised dispatch so
+ * each stage doesn\'t need its own switch statement.
+ */
+function renderTabBody(row, tab) {
+  switch (tab) {
+    case 'intelligence':  return renderIntelligenceTabBody(row);
+    case 'docs':          return renderDocsTabBody(row);
+    case 'submittedDocs': return renderSubmittedDocsTabBody(row);
+    case 'interviewPrep': return renderInterviewPrepTabBody(row);
+    case 'notes':         return renderNotesTabBody(row);
+    default:              return renderIntelligenceTabBody(row);
+  }
+}
+
+function renderStage1DetailBody(row) {
+  const tab = getDefaultTabForRow(row);
   return (
     '<div class="detail-modal-header">' +
       renderDetailHeader(row, 'Analysed', 'pill-grey') +
     '</div>' +
     '<div class="modal-body">' +
       renderStatusTimeline(row) +
-      tabBar + tabBody +
+      renderUnifiedTabBar(row, tab) +
+      renderTabBody(row, tab) +
     '</div>' +
     '<div class="modal-footer">' +
       renderStage1ActionsInner(row, tab) +
@@ -4676,25 +4888,15 @@ function renderStage1DetailBody(row) {
 }
 
 function renderStage2DetailBody(row) {
-  const tab = state.selectedTab || 'docs';
-  const tabBar =
-    '<div class="tabs">' +
-      '<button class="tab ' + (tab === 'docs' ? 'active' : '') + '" onclick="setTab(\'docs\')">Docs</button>' +
-      '<button class="tab ' + (tab === 'intelligence' ? 'active' : '') + '" onclick="setTab(\'intelligence\')">Intelligence</button>' +
-      '<button class="tab ' + (tab === 'notes' ? 'active' : '') + '" onclick="setTab(\'notes\')">Notes</button>' +
-    '</div>';
-  let tabBody;
-  if (tab === 'intelligence') tabBody = renderIntelligenceTabBody(row);
-  else if (tab === 'notes')   tabBody = renderNotesTabBody(row);
-  else                        tabBody = renderDocsTabBody(row);
-
+  const tab = getDefaultTabForRow(row);
   return (
     '<div class="detail-modal-header">' +
       renderDetailHeader(row, 'Ready to apply', 'pill-teal') +
     '</div>' +
     '<div class="modal-body">' +
       renderStatusTimeline(row) +
-      tabBar + tabBody +
+      renderUnifiedTabBar(row, tab) +
+      renderTabBody(row, tab) +
     '</div>' +
     '<div class="modal-footer">' +
       renderStage2ActionsInner(row, tab) +
@@ -4703,28 +4905,15 @@ function renderStage2DetailBody(row) {
 }
 
 function renderStage3DetailBody(row) {
-  const tab = state.selectedTab || 'interviewPrep';
-  const tabBar =
-    '<div class="tabs">' +
-      '<button class="tab ' + (tab === 'interviewPrep' ? 'active' : '') + '" onclick="setTab(\'interviewPrep\')">Interview prep</button>' +
-      '<button class="tab ' + (tab === 'intelligence' ? 'active' : '') + '" onclick="setTab(\'intelligence\')">Intelligence</button>' +
-      '<button class="tab ' + (tab === 'submittedDocs' ? 'active' : '') + '" onclick="setTab(\'submittedDocs\')">Submitted docs</button>' +
-      '<button class="tab ' + (tab === 'notes' ? 'active' : '') + '" onclick="setTab(\'notes\')">Notes</button>' +
-    '</div>';
-
-  let tabBody;
-  if (tab === 'intelligence')       tabBody = renderIntelligenceTabBody(row);
-  else if (tab === 'submittedDocs') tabBody = renderSubmittedDocsTabBody(row);
-  else if (tab === 'notes')         tabBody = renderNotesTabBody(row);
-  else                              tabBody = renderInterviewPrepTabBody(row);
-
+  const tab = getDefaultTabForRow(row);
   return (
     '<div class="detail-modal-header">' +
       renderStage3Header(row) +
     '</div>' +
     '<div class="modal-body">' +
       renderStatusTimeline(row) +
-      tabBar + tabBody +
+      renderUnifiedTabBar(row, tab) +
+      renderTabBody(row, tab) +
     '</div>' +
     '<div class="modal-footer">' +
       renderStage3ActionsInner(row, tab) +
@@ -4746,7 +4935,7 @@ function renderDetailHeader(row, pillText, pillClass) {
       renderDetailDatesRow(row) +
     '</div>' +
     (fitDisplay ?
-      '<div class="detail-header-fit"><span class="fit-circle lg ' + fitClass(row.fitScore) + '">' + fitDisplay + '</span><p class="detail-fit-label">fit score</p></div>'
+      '<div class="detail-header-fit"><span class="fit-circle lg ' + fitClass(row.fitScore) + '" title="' + escapeAttr(buildFitScoreTooltip(row)) + '">' + fitDisplay + '</span><p class="detail-fit-label">fit score</p></div>'
       : '') +
     '<button class="modal-close" onclick="closeModal()" aria-label="Close">✕</button>'
   );
@@ -4780,7 +4969,7 @@ function renderStage3Header(row) {
       renderDetailDatesRow(row) +
     '</div>' +
     (fitDisplay ?
-      '<div class="detail-header-fit"><span class="fit-circle lg ' + fitClass(row.fitScore) + '">' + fitDisplay + '</span><p class="detail-fit-label">fit score</p></div>'
+      '<div class="detail-header-fit"><span class="fit-circle lg ' + fitClass(row.fitScore) + '" title="' + escapeAttr(buildFitScoreTooltip(row)) + '">' + fitDisplay + '</span><p class="detail-fit-label">fit score</p></div>'
       : '') +
     '<button class="modal-close" onclick="closeModal()" aria-label="Close">✕</button>'
   );
@@ -5080,32 +5269,68 @@ function renderYourAnglesAccordion(row) {
 }
 
 function renderDocsTabBody(row) {
+  const resumeClickable = !!(row.resumeMd || row.submittedResumeLink);
+  const coverClickable = !!(row.coverLetterMd || row.submittedCoverLetterLink);
+
+  // Apply-to-job-ad tile is gated on BOTH submitted Drive links being present.
+  // Drive links are the canonical "this is the doc I will submit" — markdown
+  // alone isn't enough because applications go via Drive doc exports/links.
+  // Until both are filed, the tile sits muted with a hint about what's missing.
+  const hasResumeLink = !!row.submittedResumeLink;
+  const hasCoverLink = !!row.submittedCoverLetterLink;
+  const bothLinksReady = hasResumeLink && hasCoverLink;
+  const applyMethod = inferApplyMethod(row.url);
+  const noUrl = !row.url;
+
+  let applyTile;
+  if (noUrl) {
+    applyTile = (
+      '<div class="tile" style="background:var(--bg-inset);border-color:var(--border);opacity:0.6;cursor:not-allowed;" title="No job URL on this card">' +
+        '<p class="tile-label" style="color:var(--text-ter);">Apply</p>' +
+        '<p class="tile-value" style="color:var(--text-ter);font-weight:600;">No URL set</p>' +
+      '</div>'
+    );
+  } else if (!bothLinksReady) {
+    const missing = [];
+    if (!hasResumeLink) missing.push('resume');
+    if (!hasCoverLink) missing.push('cover letter');
+    const missingText = 'Waiting on ' + missing.join(' + ') + ' link';
+    applyTile = (
+      '<div class="tile" style="background:var(--bg-inset);border-color:var(--border);opacity:0.6;cursor:not-allowed;" title="Add submitted Drive links to enable">' +
+        '<p class="tile-label" style="color:var(--text-ter);">🔒 Apply via ' + escapeHtml(applyMethod) + '</p>' +
+        '<p class="tile-value" style="color:var(--text-ter);font-weight:600;font-size:11.5px;">' + escapeHtml(missingText) + '</p>' +
+      '</div>'
+    );
+  } else {
+    applyTile = (
+      '<div class="tile clickable" style="background:var(--accent);border-color:transparent;color:#FFFFFF;" ' +
+        'onclick="openJobAdAndPromptApply(' + row.rowId + ',\'' + escapeAttr(row.url) + '\')" title="Open ' + escapeHtml(applyMethod) + ' and confirm application">' +
+        '<span class="tile-hint" style="color:rgba(255,255,255,0.8);">↗</span>' +
+        '<p class="tile-label" style="color:rgba(255,255,255,0.85);">Apply now via</p>' +
+        '<p class="tile-value" style="color:#FFFFFF;font-weight:700;">' + escapeHtml(applyMethod) + '</p>' +
+      '</div>'
+    );
+  }
+
   const tiles = (
     '<div class="tile-row three">' +
-      '<div class="tile" style="background:var(--teal-soft);border-color:transparent;">' +
+      '<div class="tile' + (resumeClickable ? ' clickable' : '') + '" style="background:var(--teal-soft);border-color:transparent;"' +
+        (resumeClickable ? ' onclick="openDocViewer(' + row.rowId + ',\'resume\')" title="Click to view resume"' : '') + '>' +
+        (resumeClickable ? '<span class="tile-hint">View ↗</span>' : '') +
         '<p class="tile-label" style="color:var(--teal-text);">Resume</p>' +
         '<p class="tile-value" style="color:var(--teal-text);font-weight:600;">' + (row.resumeMd ? 'Ready' : 'Not yet generated') + '</p>' +
       '</div>' +
-      '<div class="tile" style="background:var(--teal-soft);border-color:transparent;">' +
+      '<div class="tile' + (coverClickable ? ' clickable' : '') + '" style="background:var(--teal-soft);border-color:transparent;"' +
+        (coverClickable ? ' onclick="openDocViewer(' + row.rowId + ',\'coverLetter\')" title="Click to view cover letter"' : '') + '>' +
+        (coverClickable ? '<span class="tile-hint">View ↗</span>' : '') +
         '<p class="tile-label" style="color:var(--teal-text);">Cover letter</p>' +
         '<p class="tile-value" style="color:var(--teal-text);font-weight:600;">' + (row.coverLetterMd ? 'Ready' : 'Not yet generated') + '</p>' +
       '</div>' +
-      '<div class="tile" style="background:var(--teal-soft);border-color:transparent;">' +
-        '<p class="tile-label" style="color:var(--teal-text);">Job ad</p>' +
-        '<p class="tile-value" style="color:var(--teal-text);font-weight:600;">' + escapeHtml(inferApplyMethod(row.url)) + '</p>' +
-      '</div>' +
+      applyTile +
     '</div>'
   );
 
-  const actions = (
-    '<div style="display:flex;gap:8px;margin-bottom:18px;">' +
-      '<button style="flex:1;" ' + (row.submittedResumeLink ? '' : 'disabled') + ' onclick="openDocModal(' + row.rowId + ',\'resume\')">Open resume ↗</button>' +
-      '<button style="flex:1;" ' + (row.submittedCoverLetterLink ? '' : 'disabled') + ' onclick="openDocModal(' + row.rowId + ',\'coverLetter\')">Open cover letter ↗</button>' +
-      '<button class="accent" style="flex:1;" onclick="openJobAd(\'' + escapeAttr(row.url) + '\')">Apply to job ad ↗</button>' +
-    '</div>'
-  );
-
-  return tiles + actions;
+  return tiles;
 }
 
 function renderSubmittedDocsTabBody(row) {
@@ -5145,38 +5370,16 @@ function renderInterviewPrepTabBody(row) {
     '</div>'
   );
 
-  // Preparedness score, sits to the LEFT of the practice header.
-  const ps = preparednessScore(prep);
-  const psCls = ps.value === null ? '' : preparednessClass(ps.value);
-  const psStyle = ps.value === null ? 'border-color:var(--border-strong);color:var(--text-ter);background:var(--bg-secondary);' : '';
-  const prepScoreBlock = (
-    '<div class="prep-score-block" title="Average of latest-round scores across practiced questions">' +
-      '<span class="fit-circle lg ' + psCls + '"' + (psStyle ? ' style="' + psStyle + '"' : '') + '>' + ps.display + '</span>' +
-      '<p class="prep-score-label">prep score</p>' +
-    '</div>'
-  );
-
-  const practiceHeader = (
+  const header = (
     '<div class="practice-header">' +
       '<div class="practice-header-row">' +
         '<div>' +
           '<p style="font-size:14px;font-weight:600;margin:0 0 3px;letter-spacing:-0.015em;">Practice session</p>' +
           '<p class="small-meta">' + counts.nailed + ' nailed · ' + counts.inProgress + ' in progress · ' + totalRounds + ' rounds logged</p>' +
         '</div>' +
-        '<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">' +
-          '<button onclick="openModal(\'interviewPrepPasteBack\',{rowId:' + row.rowId + '})" title="Paste in updated practice JSON from ChatGPT or Claude">Save practice JSON</button>' +
-          '<button onclick="copyContinuePracticePrompt(' + row.rowId + ')" title="Text-mode practice with Claude">Continue (text)</button>' +
-          '<button class="accent" onclick="copyVoicePracticePrompt(' + row.rowId + ')" title="Voice-mode practice with ChatGPT">Voice practice 🎙</button>' +
-        '</div>' +
+        '<button class="accent" onclick="copyContinuePracticePrompt(' + row.rowId + ')">Copy continue practice prompt</button>' +
       '</div>' +
       progressBar +
-    '</div>'
-  );
-
-  const header = (
-    '<div class="practice-header-with-score">' +
-      prepScoreBlock +
-      practiceHeader +
     '</div>'
   );
 
@@ -5207,18 +5410,6 @@ function renderQuestion(rowId, q) {
   const classes = ['q-card'];
   if (q.status === 'in_progress' && expanded) classes.push('amber');
 
-  // Latest scored round (for the header pill)
-  let latestScore = null;
-  if (q.rounds && q.rounds.length) {
-    for (let i = q.rounds.length - 1; i >= 0; i--) {
-      const s = parseInt(q.rounds[i].score, 10);
-      if (!isNaN(s) && s > 0) { latestScore = s; break; }
-    }
-  }
-  const headerScorePill = latestScore !== null
-    ? '<span class="score-pill ' + scoreClass(latestScore) + '" style="margin-right:8px;cursor:default;" title="Latest round score">' + latestScore + '/10</span>'
-    : '';
-
   const header = (
     '<div class="q-head" onclick="toggleQuestion(\'' + key + '\')">' +
       '<span class="status-dot" style="background:' + dotColor + ';"></span>' +
@@ -5230,7 +5421,7 @@ function renderQuestion(rowId, q) {
           '<p style="font-size:13.5px;margin:0;line-height:1.5;">' + q.id.toUpperCase() + ' · ' + escapeHtml(truncate(q.text, 90)) + '</p>'
         ) +
       '</div>' +
-      '<span class="small-meta" style="display:flex;align-items:center;">' + headerScorePill + (expanded ? '▾' : statusLabel + ' · ' + roundCount + ' rounds ▸') + '</span>' +
+      '<span class="small-meta">' + (expanded ? '▾' : statusLabel + ' · ' + roundCount + ' rounds ▸') + '</span>' +
     '</div>'
   );
 
@@ -5240,27 +5431,20 @@ function renderQuestion(rowId, q) {
   let body = '';
 
   if (currentRound) {
-    body += '<p class="small-meta" style="margin:4px 0 10px;text-transform:uppercase;letter-spacing:0.06em;font-weight:700;display:flex;align-items:center;gap:8px;">';
-    body += '<span>Current · Round ' + currentRound.round + '</span>';
-    body += renderRoundScorePill(rowId, q.id, currentRound);
-    body += '</p>';
+    body += '<p class="small-meta" style="margin:4px 0 10px;text-transform:uppercase;letter-spacing:0.06em;font-weight:700;">Current · Round ' + currentRound.round + '</p>';
     body += '<div class="ans-block" style="background:var(--accent-soft);"><p class="ans-label" style="color:var(--accent-text);">Your answer</p><p style="margin:0;color:var(--accent-text);">' + escapeHtml(currentRound.userAnswer) + '</p></div>';
-    body += '<div class="ans-block" style="background:var(--warning-soft);"><p class="ans-label" style="color:var(--warning-text);">Coach feedback</p><p style="margin:0;color:var(--warning-text);">' + escapeHtml(currentRound.feedback) + '</p></div>';
+    body += '<div class="ans-block" style="background:var(--warning-soft);"><p class="ans-label" style="color:var(--warning-text);">Claude feedback</p><p style="margin:0;color:var(--warning-text);">' + escapeHtml(currentRound.feedback) + '</p></div>';
     body += '<div class="q-actions">';
     if (q.status !== 'nailed') {
-      body += '<button class="small accent" onclick="copyVoicePracticePrompt(' + rowId + ')">Practice again 🎙</button>';
-      body += '<button class="small" onclick="copyContinuePracticePrompt(' + rowId + ')">Practice (text)</button>';
+      body += '<button class="small accent" onclick="copyContinuePracticePrompt(' + rowId + ')">Continue round ' + (currentRound.round + 1) + '</button>';
       body += '<button class="small" onclick="markQuestionNailed(' + rowId + ',\'' + q.id + '\')">Mark as nailed</button>';
     } else {
-      body += '<button class="small" onclick="copyVoicePracticePrompt(' + rowId + ')">Re-practice 🎙</button>';
+      body += '<button class="small" onclick="copyContinuePracticePrompt(' + rowId + ')">Re-practice</button>';
     }
     body += '</div>';
-  } else if (q.preparedAnswer || (q.preparedAnswerBullets && q.preparedAnswerBullets.length)) {
-    body += renderPreparedAnswerBlock(rowId, q);
-    body += '<div class="q-actions">';
-    body += '<button class="small accent" onclick="copyVoicePracticePrompt(' + rowId + ')">Start practice 🎙</button>';
-    body += '<button class="small" onclick="copyContinuePracticePrompt(' + rowId + ')">Practice (text)</button>';
-    body += '</div>';
+  } else if (q.preparedAnswer) {
+    body += '<div class="ans-block" style="background:var(--bg-secondary);"><p class="ans-label" style="color:var(--text-sec);">Prepared answer (starting point)</p><p style="margin:0;">' + escapeHtml(q.preparedAnswer) + '</p></div>';
+    body += '<div class="q-actions"><button class="small accent" onclick="copyContinuePracticePrompt(' + rowId + ')">Start practice</button></div>';
   }
 
   if (q.rounds && q.rounds.length > 1) {
@@ -5274,10 +5458,9 @@ function renderQuestion(rowId, q) {
     body += '</div>';
     if (prevExpanded) {
       body += previousRounds.map(function (r) {
-        return '<div style="display:flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:var(--r-md);padding:10px 14px;font-size:12.5px;margin-bottom:6px;background:var(--bg-inset);">' +
+        return '<div style="border:1px solid var(--border);border-radius:var(--r-md);padding:10px 14px;font-size:12.5px;margin-bottom:6px;background:var(--bg-inset);">' +
                  '<span style="font-weight:600;">Round ' + r.round + '</span>' +
-                 renderRoundScorePill(rowId, q.id, r) +
-                 '<span style="color:var(--text-sec);flex:1;"> · ' + escapeHtml(r.summary || '') + '</span>' +
+                 '<span style="color:var(--text-sec);"> · ' + escapeHtml(r.summary || '') + '</span>' +
                '</div>';
       }).join('');
     }
@@ -5287,307 +5470,192 @@ function renderQuestion(rowId, q) {
   return '<div class="' + classes.join(' ') + '">' + header + '<div class="q-body">' + body + '</div></div>';
 }
 
-/**
- * Editable score pill for a single round. Click to edit, blur or Enter to
- * save. Calls updateRoundScore endpoint and patches local state.
- */
-function renderRoundScorePill(rowId, questionId, round) {
-  const score = parseInt(round.score, 10);
-  const has = !isNaN(score) && score > 0;
-  const cls = has ? scoreClass(score) : 'none';
-  const display = has ? score + '/10' : 'Score';
-  const editKey = rowId + ':' + questionId + ':' + round.round;
-  return (
-    '<span class="score-pill ' + cls + '" data-edit-key="' + editKey + '" onclick="event.stopPropagation();editRoundScore(' + rowId + ',\'' + questionId + '\',' + round.round + ');" title="Click to ' + (has ? 'edit' : 'set') + ' score">' +
-      display +
-    '</span>'
-  );
-}
-
-/**
- * Render the prepared-answer block with a Full / Bullets toggle. State for
- * which format is active lives on state.prepFormat keyed by question id so
- * each question remembers its own toggle.
- */
-function renderPreparedAnswerBlock(rowId, q) {
-  const key = rowId + '-' + q.id;
-  if (!state.prepFormat) state.prepFormat = {};
-  const fmt = state.prepFormat[key] || 'full';
-  const hasBullets = Array.isArray(q.preparedAnswerBullets) && q.preparedAnswerBullets.length > 0;
-  const hasFull = !!q.preparedAnswer;
-
-  let toggle = '';
-  if (hasBullets && hasFull) {
-    toggle =
-      '<div class="prep-format-tabs">' +
-        '<button class="prep-format-tab ' + (fmt === 'full' ? 'active' : '') + '" onclick="setPrepFormat(\'' + key + '\',\'full\')">Full answer</button>' +
-        '<button class="prep-format-tab ' + (fmt === 'bullets' ? 'active' : '') + '" onclick="setPrepFormat(\'' + key + '\',\'bullets\')">Bullet points</button>' +
-      '</div>';
-  }
-
-  let content = '';
-  if (fmt === 'bullets' && hasBullets) {
-    content = '<ul style="margin:0;padding-left:20px;">' +
-      q.preparedAnswerBullets.map(function (b) {
-        return '<li style="margin-bottom:4px;">' + escapeHtml(b) + '</li>';
-      }).join('') +
-      '</ul>';
-  } else {
-    content = '<p style="margin:0;">' + escapeHtml(q.preparedAnswer || '') + '</p>';
-  }
-
-  return (
-    toggle +
-    '<div class="ans-block" style="background:var(--bg-secondary);">' +
-      '<p class="ans-label" style="color:var(--text-sec);">Prepared answer (starting point)</p>' +
-      content +
-    '</div>'
-  );
-}
-
-function setPrepFormat(key, fmt) {
-  if (!state.prepFormat) state.prepFormat = {};
-  state.prepFormat[key] = fmt;
-  render();
-}
-
-/**
- * Inline edit a round\'s score. Replaces the pill with a tiny number input,
- * commits on blur or Enter, cancels on Escape.
- */
-function editRoundScore(rowId, questionId, roundNumber) {
-  const editKey = rowId + ':' + questionId + ':' + roundNumber;
-  const pill = document.querySelector('[data-edit-key="' + editKey + '"]');
-  if (!pill || pill.querySelector('input')) return;
-
-  // Find existing score
-  const row = state.pipeline.find(function (r) { return r.rowId === rowId; });
-  if (!row) return;
-  const prep = row.interviewPrep || { questions: [] };
-  const q = (prep.questions || []).find(function (x) { return x.id === questionId; });
-  if (!q || !Array.isArray(q.rounds)) return;
-  const r = q.rounds.find(function (x) { return x.round === roundNumber; });
-  if (!r) return;
-
-  const current = parseInt(r.score, 10);
-  const initial = !isNaN(current) && current > 0 ? String(current) : '';
-  pill.innerHTML = '<input type="number" min="0" max="10" value="' + initial + '" placeholder="0-10" />';
-  const input = pill.querySelector('input');
-  input.focus();
-  input.select();
-
-  const commit = async function () {
-    const raw = input.value.trim();
-    const n = raw === '' ? 0 : parseInt(raw, 10);
-    if (isNaN(n) || n < 0 || n > 10) {
-      toast('Score must be 0-10', 'error');
-      render();
-      return;
-    }
-    try {
-      const res = await apiPost('updateRoundScore', {
-        rowId: rowId, questionId: questionId, roundNumber: roundNumber, score: n
-      });
-      if (!res.ok) throw new Error(res.error || 'Save failed');
-      // Patch local state and re-render
-      r.score = n;
-      render();
-    } catch (err) {
-      toast('Save failed: ' + err.message, 'error');
-      render();
-    }
-  };
-
-  input.addEventListener('blur', commit);
-  input.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
-    if (e.key === 'Escape') { input.value = initial; render(); }
-  });
-}
-
 /* ============================================================
    ACTION ROWS
    ============================================================ */
 
 function renderStage1ActionsInner(row, tab) {
-  // Right-side primary action depends on the active tab
-  let primary = '';
-  if (tab === 'intelligence') primary = '<button class="accent" onclick="refreshIntel(' + row.rowId + ')">Refresh intel</button>';
-  else                        primary = '<button class="accent" onclick="copyGenerateDocsPrompt(' + row.rowId + ')">Copy generate docs prompt</button>';
-
   return (
     '<div class="actions-left">' +
-      renderJobAdDropdown(row) +
-      renderHoldDropdown(row) +
-      '<button class="danger" onclick="confirmArchive(' + row.rowId + ')">Archive</button>' +
-      (isArchivedStatus(row.status) ? '<button onclick="moveToAnalysed(' + row.rowId + ')">Move to Analysed</button>' : '') +
+      (row.url ? '<button onclick="openJobAd(\'' + escapeAttr(row.url) + '\')">View ad ↗</button>' : '') +
+      (row.adContent
+        ? '<button onclick="openAdContentModal(' + row.rowId + ')">Saved ad copy</button>'
+        : '<button class="needs-attention" onclick="openAdContentModal(' + row.rowId + ')" title="This card is missing ad content. Paste it in so re-analyses work properly.">⚠ Add ad content</button>') +
+      (tab === 'intelligence' ? '<button onclick="refreshIntel(' + row.rowId + ')">Refresh intel</button>' : '') +
     '</div>' +
-    '<div class="actions-right">' + primary + '</div>'
-  );
-}
-
-function renderStage2ActionsInner(row, tab) {
-  // Right-side primary: Mark as applied if we're on docs tab, otherwise the
-  // contextual regenerate for the current tab.
-  let primary = '';
-  if (tab === 'intelligence')  primary = '<button class="accent" onclick="refreshIntel(' + row.rowId + ')">Refresh intel</button>';
-  else if (tab === 'docs')     primary = '<button class="primary" onclick="openModal(\'markAsApplied\',{rowId:' + row.rowId + '})">Mark as applied</button>';
-  else                         primary = '';
-
-  return (
-    '<div class="actions-left">' +
-      renderJobAdDropdown(row) +
-      (tab === 'docs' ? '<button onclick="copyGenerateDocsPrompt(' + row.rowId + ')">Regenerate docs</button>' : '') +
-      renderHoldDropdown(row) +
-      '<button class="danger" onclick="confirmArchive(' + row.rowId + ')">Archive</button>' +
-    '</div>' +
-    '<div class="actions-right">' + primary + '</div>'
-  );
-}
-
-function renderStage3ActionsInner(row, tab) {
-  // Stage 3 cards have the action cluster up in the Journey header now,
-  // so the bottom bar only carries the Job Ad dropdown and a contextual
-  // regenerate button on the right.
-  let primary = '';
-  if (tab === 'interviewPrep')        primary = '<button class="accent" onclick="copyInterviewPrepPrompt(' + row.rowId + ')">Regenerate prep</button>';
-  else if (tab === 'intelligence')    primary = '<button class="accent" onclick="refreshIntel(' + row.rowId + ')">Refresh intel</button>';
-  else if (tab === 'submittedDocs')   primary = '<button class="accent" onclick="copyGenerateDocsPrompt(' + row.rowId + ')">Regenerate docs</button>';
-
-  return (
-    '<div class="actions-left">' +
-      renderJobAdDropdown(row) +
-    '</div>' +
-    '<div class="actions-right">' + primary + '</div>'
-  );
-}
-
-/**
- * Compact action cluster for the Journey header on Applied+ cards. Shows
- * Log Outcome as the primary dropdown, plus Pause and Archive as smaller
- * destructive-leaning options. Replaces the old bottom-bar Hold/Archive/
- * Outcome buttons on stage 3.
- */
-function renderJourneyActions(row) {
-  const menuId = 'jact-' + row.rowId;
-  const outcomeItems = [
-    { val: 'Interviewing', label: 'Interviewing' },
-    { val: 'Interviewed',  label: 'Interviewed' },
-    { val: 'Offer',        label: 'Offer' },
-    { val: 'Accepted',     label: 'Accepted' },
-    { val: 'Rejected',     label: 'Rejected' },
-    { val: 'Withdrawn',    label: 'Withdrawn' }
-  ];
-  const outcomesHtml = outcomeItems.map(function (o) {
-    return '<button class="dd-menu-item" onclick="handleOutcomeChange(' + row.rowId + ',\'' + o.val + '\');closeAllDropdowns();">' + o.label + '</button>';
-  }).join('');
-
-  const pauseItems = [
-    { val: 'On Hold', label: 'On Hold' },
-    { val: 'Unsure',  label: 'Unsure' },
-    { val: 'Rethink', label: 'Rethink' }
-  ];
-  if (isHoldingStatus(row.status) || isArchivedStatus(row.status)) {
-    pauseItems.push({ val: '__restore', label: 'Back to active' });
-  }
-  const pauseHtml = pauseItems.map(function (p) {
-    return '<button class="dd-menu-item" onclick="handleHoldChange(' + row.rowId + ',\'' + p.val + '\');closeAllDropdowns();">' + p.label + '</button>';
-  }).join('');
-
-  return (
-    '<div class="dd-menu" id="' + menuId + '">' +
-      '<button class="small accent" onclick="toggleDropdown(\'' + menuId + '\');event.stopPropagation();">Log outcome ▾</button>' +
-      '<div class="dd-menu-list">' +
-        '<p class="dd-menu-label">Outcome</p>' +
-        outcomesHtml +
-        '<div class="dd-menu-divider"></div>' +
-        '<p class="dd-menu-label">Pause</p>' +
-        pauseHtml +
-        '<div class="dd-menu-divider"></div>' +
-        '<button class="dd-menu-item danger" onclick="confirmArchive(' + row.rowId + ');closeAllDropdowns();">Archive</button>' +
-      '</div>' +
+    '<div class="actions-right">' +
+      '<button class="accent" onclick="copyGenerateDocsPrompt(' + row.rowId + ')">Copy generate docs prompt</button>' +
     '</div>'
   );
 }
 
-/**
- * Job Ad dropdown bundling View Ad + Saved Ad Copy. Native <select> so
- * it renders outside any modal clip region, exactly like the Hold
- * dropdown next to it. onchange dispatches to the right handler then
- * resets the select so the same option can be picked again.
- */
-function renderJobAdDropdown(row) {
-  const hasAd = !!row.adContent;
-  const hasUrl = !!row.url;
-  if (!hasAd && !hasUrl) return '';
-  const placeholder = hasAd ? 'Job ad' : '⚠ Job ad';
+function renderStage2ActionsInner(row, tab) {
   return (
-    '<select onchange="handleJobAdChoice(' + row.rowId + ',this.value);this.selectedIndex=0;" title="View the original ad or the saved ad copy">' +
-      '<option value="">' + placeholder + '</option>' +
-      (hasUrl ? '<option value="view">View ad ↗</option>' : '') +
-      (hasAd
-        ? '<option value="saved">Saved ad copy</option>'
-        : '<option value="add">⚠ Add ad content</option>') +
-    '</select>'
+    '<div class="actions-left">' +
+      (row.adContent
+        ? '<button onclick="openAdContentModal(' + row.rowId + ')">Saved ad copy</button>'
+        : '<button class="needs-attention" onclick="openAdContentModal(' + row.rowId + ')" title="This card is missing ad content. Paste it in so re-analyses work properly.">⚠ Add ad content</button>') +
+      '<button onclick="copyGenerateDocsPrompt(' + row.rowId + ')">Regenerate docs</button>' +
+      (tab === 'intelligence' ? '<button onclick="refreshIntel(' + row.rowId + ')">Refresh intel</button>' : '') +
+    '</div>' +
+    '<div class="actions-right">' +
+      '<button class="primary" onclick="openModal(\'markAsApplied\',{rowId:' + row.rowId + '})">Mark as applied</button>' +
+    '</div>'
   );
 }
 
-/**
- * Handler for the Job Ad <select>. Routes the chosen value to the
- * existing action functions. Empty value (the placeholder) is a no-op.
- */
-function handleJobAdChoice(rowId, value) {
-  if (!value) return;
-  const row = state.pipeline.find(function (r) { return r.rowId === rowId; });
-  if (!row) return;
-  if (value === 'view') {
-    if (row.url) openJobAd(row.url);
+function renderStage3ActionsInner(row, tab) {
+  let primary = '';
+  if (tab === 'interviewPrep') primary = '<button onclick="copyInterviewPrepPrompt(' + row.rowId + ')">Regenerate prep</button>';
+
+  return (
+    '<div class="actions-left">' +
+      (row.url ? '<button onclick="openJobAd(\'' + escapeAttr(row.url) + '\')">View ad ↗</button>' : '') +
+      (row.adContent
+        ? '<button onclick="openAdContentModal(' + row.rowId + ')">Saved ad copy</button>'
+        : '<button class="needs-attention" onclick="openAdContentModal(' + row.rowId + ')" title="This card is missing ad content. Paste it in so re-analyses work properly.">⚠ Add ad content</button>') +
+      (tab === 'intelligence' ? '<button onclick="refreshIntel(' + row.rowId + ')">Refresh intel</button>' : '') +
+    '</div>' +
+    '<div class="actions-right">' + primary + '</div>'
+  );
+}
+
+/* Unified Outcome button — replaces the old Hold dropdown, Log outcome dropdown,
+   and standalone Archive button. Renders as a single trigger; popover renders
+   separately at document level so it escapes any clipping containers.
+   
+   Note: as of Deploy A1, the only caller is the Journey timeline (inline,
+   in renderStatusTimeline). The footer-action callers were removed because
+   they duplicated the timeline button. The function below is kept commented
+   out for reference in case we want to reintroduce a separate trigger.
+   
+   function renderOutcomeButton(row) { ... }  // removed in Deploy A1
+*/
+
+/* Renders the popover into the DOM at document body level. Called from render().
+   Returns empty string if no popover is open. Uses position:fixed so it escapes
+   any modal/parent overflow:hidden. */
+function renderOutcomePopover() {
+  if (!state.outcomePopover) return '';
+  const popover = state.outcomePopover;
+  const row = state.pipeline.find(function (r) { return r.rowId === popover.rowId; });
+  if (!row) return '';
+
+  const isStage1 = row.status === 'Sourced' || row.status === 'Analysed' || row.status === 'Ready to Apply' || isHoldingStatus(row.status);
+  const isApplied = hasBeenApplied(row);
+  const isHeldOrArchived = isHoldingStatus(row.status) || isArchivedStatus(row.status);
+
+  // OUTCOME section: only show for cards that have been applied (Stage 3 territory).
+  // Pre-applied cards can't have interviewing/offer outcomes yet.
+  const outcomeSection = !isStage1
+    ? (
+        '<div class="outcome-popover-section">' +
+          '<p class="outcome-popover-label">Outcome</p>' +
+          '<button class="outcome-popover-item" onclick="handleOutcomePopoverChoice(\'Interviewing\')">Interviewing</button>' +
+          '<button class="outcome-popover-item" onclick="handleOutcomePopoverChoice(\'Interviewed\')">Interviewed</button>' +
+          '<button class="outcome-popover-item" onclick="handleOutcomePopoverChoice(\'Offer\')">Offer</button>' +
+          '<button class="outcome-popover-item" onclick="handleOutcomePopoverChoice(\'Accepted\')">Accepted</button>' +
+          '<button class="outcome-popover-item danger" onclick="handleOutcomePopoverChoice(\'Rejected\')">Rejected</button>' +
+          '<button class="outcome-popover-item danger" onclick="handleOutcomePopoverChoice(\'Withdrawn\')">Withdrawn</button>' +
+        '</div>'
+      )
+    : (
+        '<div class="outcome-popover-section">' +
+          '<p class="outcome-popover-label">Close</p>' +
+          '<button class="outcome-popover-item danger" onclick="handleOutcomePopoverChoice(\'__archive\')">Archive (not pursuing)</button>' +
+        '</div>'
+      );
+
+  // PAUSE section: hold/unsure/rethink. Always shown unless already in one of these.
+  const pauseSection = (
+    '<div class="outcome-popover-section">' +
+      '<p class="outcome-popover-label">Pause</p>' +
+      '<button class="outcome-popover-item" onclick="handleOutcomePopoverChoice(\'On Hold\')">On Hold</button>' +
+      '<button class="outcome-popover-item" onclick="handleOutcomePopoverChoice(\'Unsure\')">Unsure</button>' +
+      '<button class="outcome-popover-item" onclick="handleOutcomePopoverChoice(\'Rethink\')">Rethink</button>' +
+    '</div>'
+  );
+
+  // RESTORE section: only if currently held or archived
+  const restoreSection = isHeldOrArchived
+    ? (
+        '<div class="outcome-popover-section">' +
+          '<button class="outcome-popover-item" onclick="handleOutcomePopoverChoice(\'__restore\')">↩ Back to active</button>' +
+        '</div>'
+      )
+    : '';
+
+  const style = 'left:' + popover.x + 'px;top:' + popover.y + 'px;';
+
+  return (
+    '<div class="outcome-popover-backdrop" onclick="closeOutcomePopover()"></div>' +
+    '<div class="outcome-popover" style="' + style + '" onclick="event.stopPropagation()">' +
+      outcomeSection +
+      pauseSection +
+      restoreSection +
+    '</div>'
+  );
+}
+
+function toggleOutcomePopover(event, rowId) {
+  event.stopPropagation();
+  // If already open for this row, close it
+  if (state.outcomePopover && state.outcomePopover.rowId === rowId) {
+    closeOutcomePopover();
     return;
   }
-  if (value === 'saved' || value === 'add') {
-    openAdContentModal(rowId);
+  // Position popover relative to the trigger button. We render it at fixed
+  // coords below the button, right-aligned to its right edge so it doesn't
+  // overflow the right side of the viewport.
+  const rect = event.currentTarget.getBoundingClientRect();
+  const popoverWidth = 200;
+  const popoverHeight = 320; // estimate; will scroll if longer
+  let x = rect.right - popoverWidth;
+  let y = rect.bottom + 6;
+  // Keep within viewport
+  if (x < 8) x = 8;
+  if (x + popoverWidth > window.innerWidth - 8) x = window.innerWidth - popoverWidth - 8;
+  // If not enough room below, flip above
+  if (y + popoverHeight > window.innerHeight - 8) {
+    y = rect.top - popoverHeight - 6;
+    if (y < 8) y = 8;
+  }
+  state.outcomePopover = { rowId: rowId, x: x, y: y };
+  render();
+}
+
+function closeOutcomePopover() {
+  if (!state.outcomePopover) return;
+  state.outcomePopover = null;
+  render();
+}
+
+function handleOutcomePopoverChoice(value) {
+  if (!state.outcomePopover) return;
+  const rowId = state.outcomePopover.rowId;
+  closeOutcomePopover();
+  if (value === '__restore') {
+    handleHoldChange(rowId, '__restore');
     return;
   }
-}
-
-function toggleDropdown(id) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  const isOpen = el.classList.contains('open');
-  closeAllDropdowns();
-  if (!isOpen) el.classList.add('open');
-}
-
-function closeAllDropdowns() {
-  document.querySelectorAll('.dd-menu.open').forEach(function (el) { el.classList.remove('open'); });
-}
-
-document.addEventListener('click', function (e) {
-  if (!e.target.closest('.dd-menu')) closeAllDropdowns();
-});
-
-function renderHoldDropdown(row) {
-  return (
-    '<select onchange="handleHoldChange(' + row.rowId + ',this.value);this.selectedIndex=0;">' +
-      '<option value="">Hold / unsure / rethink</option>' +
-      '<option value="On Hold">On Hold</option>' +
-      '<option value="Unsure">Unsure</option>' +
-      '<option value="Rethink">Rethink</option>' +
-      (isHoldingStatus(row.status) || isArchivedStatus(row.status) ? '<option value="__restore">Back to active</option>' : '') +
-    '</select>'
-  );
-}
-
-function renderLogOutcomeDropdown(row) {
-  return (
-    '<select onchange="handleOutcomeChange(' + row.rowId + ',this.value);this.selectedIndex=0;">' +
-      '<option value="">Log outcome</option>' +
-      '<option value="Interviewing">Interviewing</option>' +
-      '<option value="Interviewed">Interviewed</option>' +
-      '<option value="Offer">Offer</option>' +
-      '<option value="Accepted">Accepted</option>' +
-    '</select>'
-  );
+  if (value === '__archive') {
+    confirmArchive(rowId);
+    return;
+  }
+  // Holding statuses go through hold handler (preserves existing semantics)
+  if (value === 'On Hold' || value === 'Unsure' || value === 'Rethink') {
+    handleHoldChange(rowId, value);
+    return;
+  }
+  // Rejected/Withdrawn route through confirmArchive for the journey-aware flow
+  if (value === 'Rejected' || value === 'Withdrawn') {
+    // For applied cards, give them the "rejected vs withdrew" choice.
+    // For pre-applied cards we never get here (outcome section is hidden).
+    confirmArchive(rowId);
+    return;
+  }
+  // Positive outcomes: log directly
+  handleOutcomeChange(rowId, value);
 }
 
 /* ============================================================
@@ -5596,64 +5664,30 @@ function renderLogOutcomeDropdown(row) {
 
 function renderModal() {
   const root = document.getElementById('modal-root');
-  const stack = Array.isArray(state.modalStack) ? state.modalStack : [];
-  if (!stack.length) {
+  if (!state.modalOpen) {
     root.innerHTML = '';
     document.body.classList.remove('modal-open');
     return;
   }
   document.body.classList.add('modal-open');
 
-  // Render each layer. Lower layers are dimmed and click-to-raise; the
-  // top layer is fully interactive. We temporarily set state.modalOpen
-  // and state.modalData to each layer's values so the existing render
-  // helpers (which read from state.modalData) see the right context.
-  // Restore to the top after building.
-  const topIndex = stack.length - 1;
-  const layersHtml = stack.map(function (layer, i) {
-    state.modalOpen = layer.which;
-    state.modalData = layer.data;
-    const isTop = (i === topIndex);
-    const classes = ['modal-overlay'];
-    if (!isTop) classes.push('is-back');
-    // z-index increases up the stack so the top sits visually on top.
-    // Backdrop click on top layer closes that layer; on back layers,
-    // raises that layer (pops everything above).
-    const onclickAttr = isTop
-      ? 'if(event.target===this)closeModal()'
-      : 'event.stopPropagation();popToModalIndex(' + i + ')';
-    let content = renderModalContentByName(layer.which);
-    return '<div class="' + classes.join(' ') + '" data-stack-index="' + i + '" style="z-index:' + (1000 + i * 10) + ';" onclick="' + onclickAttr + '">' + content + '</div>';
-  }).join('');
+  let content = '';
+  if (state.modalOpen === 'intake')           content = renderIntakeModal();
+  if (state.modalOpen === 'phase1PasteBack')  content = renderPhase1PasteBackModal();
+  if (state.modalOpen === 'interviewPrepPasteBack') content = renderInterviewPrepPasteBackModal();
+  if (state.modalOpen === 'openResume')       content = renderOpenDocModal('resume');
+  if (state.modalOpen === 'openCoverLetter')  content = renderOpenDocModal('coverLetter');
+  if (state.modalOpen === 'docViewer')        content = renderDocViewerModal();
+  if (state.modalOpen === 'markAsApplied')    content = renderMarkAsAppliedModal();
+  if (state.modalOpen === 'confirmArchive')   content = renderConfirmArchiveModal();
+  if (state.modalOpen === 'confirmRefreshIntel') content = renderConfirmRefreshIntelModal();
+  if (state.modalOpen === 'editJourney')        content = renderEditJourneyModal();
+  if (state.modalOpen === 'batchUpdateJourney') content = renderBatchUpdateJourneyModal();
+  if (state.modalOpen === 'cardDetail')       content = renderCardDetailModal();
+  if (state.modalOpen === 'adContent')        content = renderAdContentModal();
+  if (state.modalOpen === 'batchPasteBack')   content = renderBatchPasteBackModal();
 
-  // Restore top of stack as the canonical modalOpen/modalData
-  const top = stack[topIndex];
-  state.modalOpen = top.which;
-  state.modalData = top.data;
-
-  root.innerHTML = layersHtml;
-}
-
-/**
- * Builds the content for a given modal name. Pulled out of renderModal
- * so the layer-rendering loop can call it once per stack entry. Reads
- * from state.modalData which is set by the caller for each layer.
- */
-function renderModalContentByName(which) {
-  if (which === 'intake')                  return renderIntakeModal();
-  if (which === 'phase1PasteBack')         return renderPhase1PasteBackModal();
-  if (which === 'interviewPrepPasteBack')  return renderInterviewPrepPasteBackModal();
-  if (which === 'openResume')              return renderOpenDocModal('resume');
-  if (which === 'openCoverLetter')         return renderOpenDocModal('coverLetter');
-  if (which === 'markAsApplied')           return renderMarkAsAppliedModal();
-  if (which === 'confirmArchive')          return renderConfirmArchiveModal();
-  if (which === 'confirmRefreshIntel')     return renderConfirmRefreshIntelModal();
-  if (which === 'editJourney')             return renderEditJourneyModal();
-  if (which === 'batchUpdateJourney')      return renderBatchUpdateJourneyModal();
-  if (which === 'cardDetail')              return renderCardDetailModal();
-  if (which === 'adContent')               return renderAdContentModal();
-  if (which === 'batchPasteBack')          return renderBatchPasteBackModal();
-  return '';
+  root.innerHTML = '<div class="modal-overlay" onclick="if(event.target===this)closeModal()">' + content + '</div>';
 }
 
 function renderCardDetailModal() {
@@ -5935,6 +5969,88 @@ async function handleSaveInterviewPrep(rowId) {
     closeModal();
     await refreshAll();
   } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+function renderDocViewerModal() {
+  const rowId = state.modalData.rowId;
+  const docType = state.modalData.docType;
+  const activeView = state.modalData.activeView || 'markdown';
+  const row = state.pipeline.find(function (r) { return r.rowId === rowId; });
+  if (!row) return '';
+
+  const md = docType === 'resume' ? row.resumeMd : row.coverLetterMd;
+  const link = docType === 'resume' ? row.submittedResumeLink : row.submittedCoverLetterLink;
+  const label = docType === 'resume' ? 'Tailored resume' : 'Tailored cover letter';
+  const hasMd = !!md;
+  const hasDoc = !!link;
+  const embedUrl = toPreviewUrl(link);
+
+  const tabs = (
+    '<div class="doc-viewer-tabs">' +
+      '<button class="doc-viewer-tab' + (activeView === 'markdown' ? ' active' : '') + '"' +
+        (hasMd ? '' : ' disabled') +
+        ' onclick="switchDocViewerView(\'markdown\')">Markdown' +
+        (hasMd ? '' : ' (none)') +
+      '</button>' +
+      '<button class="doc-viewer-tab' + (activeView === 'gdoc' ? ' active' : '') + '"' +
+        (hasDoc ? '' : ' disabled') +
+        ' onclick="switchDocViewerView(\'gdoc\')">Google Doc' +
+        (hasDoc ? '' : ' (not yet created)') +
+      '</button>' +
+    '</div>'
+  );
+
+  let pane;
+  if (activeView === 'markdown' && hasMd) {
+    pane = (
+      '<div class="doc-md-pane">' +
+        '<pre class="doc-md-content">' + escapeHtml(md) + '</pre>' +
+      '</div>'
+    );
+  } else if (activeView === 'gdoc' && hasDoc) {
+    pane = '<iframe class="gdoc-embed" src="' + embedUrl + '"></iframe>';
+  } else {
+    pane = '<div class="empty-state"><p>Nothing to show in this view yet.</p></div>';
+  }
+
+  const actionsBar = (
+    '<div style="padding:12px 28px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;">' +
+      (hasMd ? '<button onclick="copyToClipboard(' + JSON.stringify(md).replace(/</g, '\\u003c') + ',\'Markdown copied\')">Copy markdown</button>' : '') +
+      (hasDoc ? '<button class="accent" onclick="openExternal(\'' + escapeAttr(link) + '\')">Open in Drive ↗</button>' : '') +
+      (hasDoc ? '<button onclick="copyToClipboard(\'' + escapeAttr(link) + '\',\'Drive link copied\')">Copy Drive link</button>' : '') +
+      '<button onclick="copyGenerateDocsPrompt(' + rowId + ')">Regenerate from Claude</button>' +
+    '</div>'
+  );
+
+  return (
+    '<div class="modal wide">' +
+      '<div class="modal-header">' +
+        '<div>' +
+          '<p class="small-meta" style="text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;font-weight:600;">' + label + '</p>' +
+          '<p class="modal-title">' + escapeHtml(row.role) + ' · ' + escapeHtml(row.company) + '</p>' +
+          '<p class="modal-subtitle">' + (activeView === 'markdown' ? 'Generated content from Claude' : 'Embedded live from Google Drive') + '</p>' +
+        '</div>' +
+        '<button class="modal-close" onclick="closeModal()" aria-label="Close">✕</button>' +
+      '</div>' +
+      tabs +
+      actionsBar +
+      pane +
+    '</div>'
+  );
+}
+
+function openDocViewer(rowId, docType) {
+  const row = state.pipeline.find(function (r) { return r.rowId === rowId; });
+  if (!row) return;
+  const hasMd = docType === 'resume' ? !!row.resumeMd : !!row.coverLetterMd;
+  // Default to markdown if it exists (newer/more frequent case), else gdoc
+  const defaultView = hasMd ? 'markdown' : 'gdoc';
+  openModal('docViewer', { rowId: rowId, docType: docType, activeView: defaultView });
+}
+
+function switchDocViewerView(view) {
+  state.modalData.activeView = view;
+  renderModal();
 }
 
 function renderOpenDocModal(docType) {
@@ -6318,17 +6434,6 @@ function renderEditJourneyModal() {
   const draft = state.editJourneyDraft || [];
   const allStatuses = STATUSES.map(function (s) { return s.val; });
 
-  // Detect whether the draft's array order matches its date order. If
-  // not, surface a warning with a one-click fix. Drag-to-reorder lets
-  // the user override on purpose; this catches accidental drift.
-  const outOfOrder = isJourneyOutOfOrder(draft);
-  const warningHtml = outOfOrder
-    ? '<div class="journey-edit-warning">' +
-        '<span>⚠ Order doesn\'t match dates. The last row becomes the current status, so this may not be what you want.</span>' +
-        '<button onclick="sortJourneyDraftByDate(true)">Sort by date</button>' +
-      '</div>'
-    : '';
-
   const rowsHtml = draft.length
     ? draft.map(function (entry, i) {
         const statusOptions = allStatuses.map(function (s) {
@@ -6337,13 +6442,7 @@ function renderEditJourneyModal() {
         // Convert ISO to local datetime-local value
         const dtValue = entry.at ? isoToLocalDateTime(entry.at) : '';
         return (
-          '<div class="journey-edit-row" draggable="true" data-jrow-index="' + i + '"' +
-            ' ondragstart="onJourneyDragStart(event,' + i + ')"' +
-            ' ondragover="onJourneyDragOver(event,' + i + ')"' +
-            ' ondragleave="onJourneyDragLeave(event,' + i + ')"' +
-            ' ondrop="onJourneyDrop(event,' + i + ')"' +
-            ' ondragend="onJourneyDragEnd(event)">' +
-            '<span class="journey-edit-handle" title="Drag to reorder">⋮⋮</span>' +
+          '<div class="journey-edit-row">' +
             '<span class="journey-edit-index">' + (i + 1) + '.</span>' +
             '<select onchange="updateEditJourneyField(' + i + ',\'status\',this.value)">' + statusOptions + '</select>' +
             '<input type="datetime-local" value="' + dtValue + '" onchange="updateEditJourneyField(' + i + ',\'at\',this.value)" />' +
@@ -6364,9 +6463,8 @@ function renderEditJourneyModal() {
       '</div>' +
       '<div class="modal-body">' +
         '<p class="small-meta" style="margin-bottom:14px;line-height:1.5;">' +
-          'Entries are listed oldest to newest by date. The last row becomes the current status. Drag the handle (⋮⋮) to manually reorder if needed.' +
+          'Edit the status history for this card. Entries appear in order top-to-bottom (oldest first). The last entry becomes the card\'s current status.' +
         '</p>' +
-        warningHtml +
         '<div class="journey-edit-list">' + rowsHtml + '</div>' +
         '<button class="small" style="margin-top:12px;" onclick="addEditJourneyRow()">+ Add status</button>' +
       '</div>' +
@@ -6376,51 +6474,6 @@ function renderEditJourneyModal() {
       '</div>' +
     '</div>'
   );
-}
-
-/**
- * Sort the draft journey chronologically (oldest first). Entries without
- * a date are pushed to the end and keep their original relative order
- * (since "no date" is conceptually "now-ish"). Stable sort.
- *
- * If `rerender` is true, repaints the modal afterward. Skip the rerender
- * when calling from a context that's about to render anyway.
- */
-function sortJourneyDraftByDate(rerender) {
-  if (!Array.isArray(state.editJourneyDraft)) return;
-  // Decorate-sort-undecorate to keep stable ordering for tied dates and
-  // for entries without a date.
-  state.editJourneyDraft = state.editJourneyDraft
-    .map(function (e, i) {
-      const t = e.at ? new Date(e.at).getTime() : null;
-      return { entry: e, time: t, originalIndex: i };
-    })
-    .sort(function (a, b) {
-      // Undated entries go to the end (largest sentinel)
-      const at = a.time === null ? Number.POSITIVE_INFINITY : a.time;
-      const bt = b.time === null ? Number.POSITIVE_INFINITY : b.time;
-      if (at !== bt) return at - bt;
-      return a.originalIndex - b.originalIndex;  // stable
-    })
-    .map(function (x) { return x.entry; });
-  if (rerender) renderModal();
-}
-
-/**
- * Returns true if the array order of the draft doesn't match chronological
- * order (oldest first). Used to surface a warning + sort button.
- * Entries without a date are ignored (treated as compatible with any order).
- */
-function isJourneyOutOfOrder(draft) {
-  if (!Array.isArray(draft) || draft.length < 2) return false;
-  let lastTime = null;
-  for (let i = 0; i < draft.length; i++) {
-    const t = draft[i].at ? new Date(draft[i].at).getTime() : null;
-    if (t === null) continue;
-    if (lastTime !== null && t < lastTime) return true;
-    lastTime = t;
-  }
-  return false;
 }
 
 /**
@@ -6445,10 +6498,6 @@ function openEditJourneyModal(rowId) {
   state.editJourneyDraft = row.statusHistory
     ? JSON.parse(JSON.stringify(row.statusHistory))
     : [];
-  // Auto-sort on open so the user always starts from a clean chronological
-  // order. If existing history was out of order in the sheet, this fixes
-  // the display (but doesn't write back until Save).
-  sortJourneyDraftByDate(false);
   openModal('editJourney', { rowId: rowId });
 }
 
@@ -6457,89 +6506,22 @@ function updateEditJourneyField(index, field, value) {
   if (field === 'at') {
     // Convert local datetime-local string back to ISO. Empty = null.
     state.editJourneyDraft[index].at = value ? new Date(value).toISOString() : null;
-    // Re-sort + re-render: the row that was just edited may need to move.
-    // Without this, the user changes a date and the array order silently
-    // becomes inconsistent with the dates. The whole point of Path B is
-    // chronological by default; explicit drag overrides that.
-    sortJourneyDraftByDate(true);
   } else {
     state.editJourneyDraft[index][field] = value;
-    // No re-render — input's own value change is sufficient
   }
+  // No re-render — input's own value change is sufficient
 }
 
 function addEditJourneyRow() {
   if (!Array.isArray(state.editJourneyDraft)) state.editJourneyDraft = [];
   state.editJourneyDraft.push({ status: 'Analysed', at: new Date().toISOString() });
-  // New rows get "now" as their date, which means they'll naturally land
-  // at the end after sort. Sort + render to confirm this.
-  sortJourneyDraftByDate(true);
+  renderModal();
 }
 
 function removeEditJourneyRow(index) {
   if (!state.editJourneyDraft) return;
   state.editJourneyDraft.splice(index, 1);
   renderModal();
-}
-
-/* ============================================================
-   JOURNEY DRAG-AND-DROP
-   Native HTML5 drag/drop. Drag handle on each row sets the source index;
-   row-level dragover sets the drop target. On drop, we splice the source
-   entry out and insert it at the target position. After drag, we DO NOT
-   auto-sort — the drag is an explicit user override of date order.
-   ============================================================ */
-
-let _journeyDragSourceIndex = null;
-
-function onJourneyDragStart(event, index) {
-  _journeyDragSourceIndex = index;
-  event.dataTransfer.effectAllowed = 'move';
-  // Some browsers require setData for drag to actually fire
-  try { event.dataTransfer.setData('text/plain', String(index)); } catch (e) { /* noop */ }
-  // Visual cue
-  const el = event.currentTarget;
-  if (el && el.classList) el.classList.add('dragging');
-}
-
-function onJourneyDragOver(event, index) {
-  if (_journeyDragSourceIndex === null || _journeyDragSourceIndex === index) return;
-  event.preventDefault();  // required to allow drop
-  event.dataTransfer.dropEffect = 'move';
-  const el = event.currentTarget;
-  if (el && el.classList) el.classList.add('drop-target');
-}
-
-function onJourneyDragLeave(event, index) {
-  const el = event.currentTarget;
-  if (el && el.classList) el.classList.remove('drop-target');
-}
-
-function onJourneyDrop(event, targetIndex) {
-  event.preventDefault();
-  const src = _journeyDragSourceIndex;
-  _journeyDragSourceIndex = null;
-  if (src === null || src === targetIndex) return;
-  if (!Array.isArray(state.editJourneyDraft)) return;
-
-  const item = state.editJourneyDraft.splice(src, 1)[0];
-  // Adjust insertion index when removing the source shifted positions
-  const insertAt = src < targetIndex ? targetIndex : targetIndex;
-  // Note: when src < target, splicing src out makes target shift left by 1,
-  // and we want to insert AFTER the original target position — so use
-  // insertAt = target. When src > target, insertAt = target.
-  // Both reduce to: insertAt = targetIndex. Splice + insert handles it.
-  state.editJourneyDraft.splice(targetIndex, 0, item);
-  renderModal();
-}
-
-function onJourneyDragEnd(event) {
-  _journeyDragSourceIndex = null;
-  // Defensive: clear any lingering visual state
-  document.querySelectorAll('.journey-edit-row.dragging, .journey-edit-row.drop-target').forEach(function (el) {
-    el.classList.remove('dragging');
-    el.classList.remove('drop-target');
-  });
 }
 
 async function handleSaveJourney(rowId) {
@@ -6732,54 +6714,8 @@ async function handleBatchUpdateJourney() {
    ACTIONS
    ============================================================ */
 
-/**
- * Push a modal onto the stack. The new modal becomes the active (top)
- * modal; any previously open modals stay rendered behind, dimmed, and
- * become click-targets for "go back". modalOpen and modalData mirror
- * the top of the stack so older code reads keep working unchanged.
- */
-function openModal(which, data) {
-  if (!Array.isArray(state.modalStack)) state.modalStack = [];
-  state.modalStack.push({ which: which, data: data || {} });
-  state.modalOpen = which;
-  state.modalData = data || {};
-  renderModal();
-}
-
-/**
- * Pop the top modal off the stack. If there's another modal underneath,
- * it becomes active again (its render reflects whatever state it had —
- * editJourneyDraft, modal-specific tabs etc all persist on state.*).
- * If the stack is empty, no modal is open and the body class is cleared.
- */
-function closeModal() {
-  if (!Array.isArray(state.modalStack)) state.modalStack = [];
-  state.modalStack.pop();
-  if (state.modalStack.length) {
-    const top = state.modalStack[state.modalStack.length - 1];
-    state.modalOpen = top.which;
-    state.modalData = top.data;
-  } else {
-    state.modalOpen = null;
-    state.modalData = {};
-  }
-  renderModal();
-}
-
-/**
- * Pop everything above a given stack index, raising that modal back to
- * the top. Used when the user clicks on a back-modal to "go back" to it.
- * Index is the stack position to keep — anything after it is dropped.
- */
-function popToModalIndex(index) {
-  if (!Array.isArray(state.modalStack)) return;
-  if (index < 0 || index >= state.modalStack.length - 1) return;
-  state.modalStack = state.modalStack.slice(0, index + 1);
-  const top = state.modalStack[state.modalStack.length - 1];
-  state.modalOpen = top.which;
-  state.modalData = top.data;
-  renderModal();
-}
+function openModal(which, data) { state.modalOpen = which; state.modalData = data || {}; renderModal(); }
+function closeModal() { state.modalOpen = null; state.modalData = {}; if (state.outcomePopover) state.outcomePopover = null; renderModal(); renderPopovers(); }
 
 function toggleCardSelection(rowId) {
   if (!state.batchMode) return;
@@ -6790,12 +6726,10 @@ function toggleCardSelection(rowId) {
 
 function openCardDetail(rowId) {
   state.selectedRowId = rowId;
-  const row = state.pipeline.find(function (r) { return r.rowId === rowId; });
-  if (row) {
-    if (row.status === 'Ready to Apply') state.selectedTab = 'docs';
-    else if (isAppliedSubStatus(row.status) || row.status === 'Applied') state.selectedTab = 'interviewPrep';
-    else state.selectedTab = 'intelligence';
-  }
+  // Clear any previously-selected tab so getDefaultTabForRow picks the
+  // correct next-action tab for this card\'s current state. The unified
+  // tab system handles all default routing — no per-stage logic here.
+  state.selectedTab = null;
   openModal('cardDetail', { rowId: rowId });
 }
 
@@ -6851,6 +6785,32 @@ async function copyPromptFromApi(type, rowId, successMsg) {
 }
 
 function copyAnalysePrompt() { copyPromptFromApi('analyse', null, 'Analyse prompt copied — paste into Claude'); }
+
+/**
+ * Dev prompt — copied to clipboard for pasting into a fresh Claude chat
+ * in the same project. Bundles the repo location, file URLs, and the
+ * deploy workflow so the new chat starts with full context. Louie just
+ * fills in the change he wants at the bottom.
+ */
+function copyDevPrompt() {
+  const prompt = [
+    'I want to make tech changes to my Job Pipeline Dashboard.',
+    '',
+    'Repo: github.com/louie-redbird/job-pipeline-dashboard (private)',
+    'Local: ~/Projects/job-pipeline-dashboard',
+    '',
+    'Please fetch the latest Code.gs and Index.html from:',
+    '- https://raw.githubusercontent.com/louie-redbird/job-pipeline-dashboard/refs/heads/main/Code.gs',
+    '- https://raw.githubusercontent.com/louie-redbird/job-pipeline-dashboard/refs/heads/main/Index.html',
+    '',
+    'Workflow reminder: edit locally → commit → push to GitHub → paste into Apps Script → new deployment → update GoDaddy iframe src at jobs.redbirdagency.com.au with new /exec URL.',
+    '',
+    'What I want to change:',
+    '[describe here]'
+  ].join('\n');
+  copyToClipboard(prompt, 'Dev prompt copied — paste into a new chat in the project');
+}
+
 function copyGenerateDocsPrompt(rowId) {
   copyPromptFromApi('generateDocs', rowId, 'Generate docs prompt copied');
   setTimeout(function () { openModal('phase1PasteBack', { rowId: rowId }); }, 300);
@@ -6860,7 +6820,6 @@ function copyInterviewPrepPrompt(rowId) {
   setTimeout(function () { openModal('interviewPrepPasteBack', { rowId: rowId }); }, 300);
 }
 function copyContinuePracticePrompt(rowId) { copyPromptFromApi('continuePractice', rowId, 'Continue practice prompt copied'); }
-function copyVoicePracticePrompt(rowId) { copyPromptFromApi('voicePractice', rowId, 'Voice practice prompt copied — paste into ChatGPT'); }
 
 /**
  * Single-card "Refresh intel" — reuses the batch analyse infrastructure
@@ -7097,140 +7056,19 @@ function openExternal(url) { if (!url) { toast('No URL', 'error'); return; } win
    ============================================================ */
 
 function countByColumn() {
-  // Two counts shown in the dashboard subtitle:
-  //   active  = Applied + Interviewing (Interviewing intentionally
-  //             double-counts — it's still an in-flight application AND
-  //             an engagement signal)
-  //   engaged = Interviewing + Interviewed only. Offer/Accepted excluded
-  //             (rare, treat as "out of tracking"); Rejected excluded
-  //             even when the card reached interview, because Rejected is
-  //             the close-of-engagement, not engagement itself.
-  //   holding = paused (Unsure / On Hold / Rethink) — not displayed but
-  //             kept for any callers that need it.
+  // Three counts:
+  //   active  = in-flight but no-one\'s engaged yet (Potential + Applied)
+  //   engaged = someone\'s engaged with you (Interviewing through Accepted)
+  //   holding = paused (Unsure / On Hold / Rethink)
   // Archive (Rejected-without-interview + Withdrawn) is separate.
   let active = 0, engaged = 0, holding = 0;
   state.pipeline.forEach(function (r) {
-    if (['Applied', 'Interviewing'].indexOf(r.status) > -1) active++;
-    if (['Interviewing', 'Interviewed'].indexOf(r.status) > -1) engaged++;
-    if (isHoldingStatus(r.status)) holding++;
+    if (['Sourced', 'Analysed', 'Ready to Apply', 'Applied'].indexOf(r.status) > -1) active++;
+    else if (['Interviewing', 'Interviewed', 'Offer', 'Accepted'].indexOf(r.status) > -1) engaged++;
+    else if (r.status === 'Rejected' && rejectedReachedInterview(r)) engaged++;
+    else if (isHoldingStatus(r.status)) holding++;
   });
   return { active: active, engaged: engaged, holding: holding };
-}
-
-/**
- * Total of "Prospects" cards — Sourced + Analysed + Ready to Apply.
- * Used in the dashboard subtitle to label the front-of-funnel volume.
- * Display-only — internal status names and column tabs are unchanged.
- */
-function countProspects() {
-  return state.pipeline.filter(function (r) {
-    return ['Sourced', 'Analysed', 'Ready to Apply'].indexOf(r.status) > -1;
-  }).length;
-}
-
-/**
- * Conversion funnel computed from status history (not current status).
- * A card counts toward a stage if it ever reached that stage:
- *   - prospects = ever reached Sourced/Analysed/Ready to Apply
- *   - applied   = ever reached Applied (or any later substage, since
- *                 you can\'t skip Applied on the way to Interviewing)
- *   - engaged   = ever reached Interviewing or Interviewed
- *
- * This gives a true "where does the pipeline leak" view:
- * a Rejected card that interviewed counts toward all three stages
- * because it actually moved through them, regardless of where it
- * ended up. That\'s the honest read of conversion.
- *
- * Conversion rates:
- *   appliedPct = applied / prospects
- *   engagedPct = engaged / applied
- */
-function conversionFunnel() {
-  const PROSPECT_STAGES = ['Sourced', 'Analysed', 'Ready to Apply'];
-  const APPLIED_STAGES  = ['Applied', 'Interviewing', 'Interviewed', 'Offer', 'Accepted', 'Rejected'];
-  const ENGAGED_STAGES  = ['Interviewing', 'Interviewed'];
-
-  function everReached(row, stages) {
-    if (stages.indexOf(row.status) > -1) return true;
-    const h = Array.isArray(row.statusHistory) ? row.statusHistory : [];
-    return h.some(function (e) { return stages.indexOf(e.status) > -1; });
-  }
-
-  let prospects = 0, applied = 0, engaged = 0;
-  state.pipeline.forEach(function (r) {
-    if (everReached(r, PROSPECT_STAGES)) prospects++;
-    if (everReached(r, APPLIED_STAGES))  applied++;
-    if (everReached(r, ENGAGED_STAGES))  engaged++;
-  });
-
-  const appliedPct = prospects > 0 ? Math.round((applied / prospects) * 100) : null;
-  const engagedPct = applied   > 0 ? Math.round((engaged / applied)   * 100) : null;
-
-  return {
-    prospects: prospects,
-    applied:   applied,
-    engaged:   engaged,
-    appliedPct: appliedPct,
-    engagedPct: engagedPct
-  };
-}
-
-/**
- * Class for conversion-rate colour. Thresholds reflect realistic B2B
- * job-hunt rates: <20% is leaky, 20-50% is normal, 50%+ is strong.
- * For the Applied → Engaged step, hitting 50% means half your
- * applications get a real conversation — that\'s very good.
- */
-function convRateClass(pct) {
-  if (pct === null || pct === undefined) return '';
-  if (pct >= 50) return 'good';
-  if (pct >= 20) return 'mid';
-  return 'weak';
-}
-
-/**
- * 3-stage horizontal funnel for the dashboard. Reads from
- * conversionFunnel() and produces a single row showing
- * Prospects → Applied → Engaged with conversion % between stages.
- */
-function renderConversionFunnel() {
-  const f = conversionFunnel();
-  // Hide entirely when there\'s nothing in the pipeline. Empty state
-  // would just be three zeros and add visual noise.
-  if (f.prospects === 0 && f.applied === 0 && f.engaged === 0) return '';
-
-  const arrow = function (pct, fromLabel, toLabel) {
-    const cls = convRateClass(pct);
-    const display = pct === null ? '—' : pct + '%';
-    const tip = pct === null
-      ? toLabel + ' rate (no data yet)'
-      : pct + '% of ' + fromLabel.toLowerCase() + ' reached ' + toLabel.toLowerCase();
-    return (
-      '<div class="conv-arrow" title="' + tip + '">' +
-        '<span class="conv-arrow-rate ' + cls + '">' + display + '</span>' +
-        '<span class="conv-arrow-glyph">▶</span>' +
-      '</div>'
-    );
-  };
-
-  return (
-    '<div class="conv-funnel" role="region" aria-label="Conversion funnel">' +
-      '<div class="conv-stage conv-stage-prospects" title="Cards that ever reached Sourced, Analysed, or Ready to Apply">' +
-        '<span class="conv-stage-num">' + f.prospects + '</span>' +
-        '<span class="conv-stage-label">Prospects</span>' +
-      '</div>' +
-      arrow(f.appliedPct, 'Prospects', 'Applied') +
-      '<div class="conv-stage conv-stage-applied" title="Cards that ever reached Applied">' +
-        '<span class="conv-stage-num">' + f.applied + '</span>' +
-        '<span class="conv-stage-label">Applied</span>' +
-      '</div>' +
-      arrow(f.engagedPct, 'Applied', 'Engaged') +
-      '<div class="conv-stage conv-stage-engaged" title="Cards that ever reached Interviewing or Interviewed">' +
-        '<span class="conv-stage-num">' + f.engaged + '</span>' +
-        '<span class="conv-stage-label">Engaged</span>' +
-      '</div>' +
-    '</div>'
-  );
 }
 
 /**
@@ -7746,45 +7584,6 @@ function practiceCounts(questions) {
   };
 }
 
-/**
- * Compute card-level Preparedness score from a prep object. Averages the
- * latest-round score across all questions that have at least one scored
- * round. Returns { display, value, count } where display is "7" or "—",
- * value is the numeric average rounded (or null), and count is how many
- * questions contributed. Questions without any scored rounds are skipped
- * entirely so unpracticed questions don\'t drag the average down.
- */
-function preparednessScore(prep) {
-  if (!prep || !Array.isArray(prep.questions)) return { display: '—', value: null, count: 0 };
-  let sum = 0;
-  let n = 0;
-  prep.questions.forEach(function (q) {
-    if (!Array.isArray(q.rounds) || !q.rounds.length) return;
-    // Find the latest round that has a score (some old rounds won't).
-    for (let i = q.rounds.length - 1; i >= 0; i--) {
-      const s = parseInt(q.rounds[i].score, 10);
-      if (!isNaN(s) && s > 0) { sum += s; n++; break; }
-    }
-  });
-  if (!n) return { display: '—', value: null, count: 0 };
-  const avg = Math.round(sum / n);
-  return { display: String(avg), value: avg, count: n };
-}
-
-function preparednessClass(score) {
-  if (score === null || score === undefined) return '';
-  if (score >= 8) return 'h';
-  if (score >= 5) return 'm';
-  return 'lo';
-}
-
-function scoreClass(score) {
-  if (score === null || score === undefined || score === 0) return 'none';
-  if (score >= 7) return 'high';
-  if (score >= 4) return 'mid';
-  return 'low';
-}
-
 function isHoldingStatus(s) { return ['On Hold', 'Unsure', 'Rethink'].indexOf(s) > -1; }
 function isArchivedStatus(s) { return ['Rejected', 'Withdrawn'].indexOf(s) > -1; }
 function isAppliedSubStatus(s) { return ['Applied', 'Interviewing', 'Interviewed', 'Offer', 'Accepted'].indexOf(s) > -1; }
@@ -7847,7 +7646,9 @@ function renderStatusTimeline(row) {
       '<div class="timeline-header">' +
         '<p class="timeline-label">Journey</p>' +
         '<div style="display:flex;gap:6px;align-items:center;">' +
-          renderJourneyActions(row) +
+          '<button class="accent small outcome-trigger" onclick="toggleOutcomePopover(event,' + row.rowId + ')">' +
+            'Log outcome <span style="font-size:9px;opacity:0.8;">▾</span>' +
+          '</button>' +
           '<button class="small ghost timeline-edit-btn" onclick="openEditJourneyModal(' + row.rowId + ')">Edit</button>' +
         '</div>' +
       '</div>' +
@@ -8204,7 +8005,15 @@ function _startSaveIndicatorQuips() {
 }
 
 document.addEventListener('keydown', function (e) {
-  if (e.key === 'Escape' && state.modalOpen) closeModal();
+  if (e.key === 'Escape') {
+    if (state.outcomePopover) { closeOutcomePopover(); return; }
+    if (state.modalOpen) { closeModal(); return; }
+    if (state.applyPrompt) { dismissApplyPrompt(); return; }
+  }
+});
+
+window.addEventListener('resize', function () {
+  if (state.outcomePopover) closeOutcomePopover();
 });
 
 // Sticky header drop-shadow + offset: measure the header height and set
