@@ -1176,53 +1176,7 @@ input::placeholder, textarea::placeholder { color: var(--text-ter); }
 .sort-menu-item:hover { background: var(--bg); color: var(--text); }
 .sort-menu-item.active { background: var(--accent-soft); color: var(--accent-text); font-weight: 600; }
 
-/* Outcome popover — unified replacement for Hold dropdown + Log outcome dropdown + Archive button.
-   Uses position: fixed with JS-set coords so it escapes any parent overflow:hidden / clipping. */
-.outcome-trigger { display: inline-flex; align-items: center; gap: 5px; }
-.outcome-popover {
-  position: fixed;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r-md);
-  box-shadow: 0 8px 24px rgba(28,28,28,0.12);
-  z-index: 1000;
-  min-width: 200px;
-  padding: 6px;
-  display: flex;
-  flex-direction: column;
-  animation: header-menu-slide 0.15s var(--ease);
-}
-[data-theme="dark"] .outcome-popover { box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
-.outcome-popover-section { display: flex; flex-direction: column; padding: 4px 0; }
-.outcome-popover-section + .outcome-popover-section { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 8px; }
-.outcome-popover-label {
-  font-size: 10.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-ter);
-  font-weight: 600;
-  padding: 4px 12px 6px;
-  margin: 0;
-}
-.outcome-popover-item {
-  background: transparent;
-  border: none;
-  padding: 8px 12px;
-  font-size: 13px;
-  color: var(--text);
-  text-align: left;
-  cursor: pointer;
-  border-radius: var(--r-sm);
-  font-family: inherit;
-  transition: background var(--duration-fast) var(--ease);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.outcome-popover-item:hover { background: var(--bg); }
-.outcome-popover-item.danger { color: var(--danger-text); }
-.outcome-popover-item.danger:hover { background: var(--danger-soft); }
-.outcome-popover-backdrop { position: fixed; inset: 0; z-index: 999; background: transparent; }
+/* Log Outcome removed Apr 29 2026 — popover CSS deleted. */
 .column-cards { display: flex; flex-direction: column; gap: 8px; }
 
 /* COLUMN LANE TINTS — soft 4-6% opacity wash behind each column so the
@@ -3058,9 +3012,6 @@ const state = {
   search: '',
   editJourneyDraft: null,
   batchJourneyDraft: null,
-  // Outcome popover: { rowId, x, y } when open, null when closed.
-  // Lives outside modal state because it can open from the journey row inside the detail modal too.
-  outcomePopover: null,
   // Apply prompt: { rowId } when active, null when dismissed.
   // Triggered when user clicks "Apply to job ad" so they can mark applied
   // without hunting for the footer button after coming back from the ad.
@@ -3434,9 +3385,10 @@ function render() {
 }
 
 function renderPopovers() {
+  // Log Outcome was removed Apr 29 2026. This function stays as a
+  // no-op so existing call sites in render()/closeModal() don't break.
   const root = document.getElementById('popover-root');
-  if (!root) return;
-  root.innerHTML = renderOutcomePopover();
+  if (root) root.innerHTML = '';
 }
 
 function renderApplyPrompt() {
@@ -5524,131 +5476,17 @@ function renderStage3ActionsInner(row, tab) {
    function renderOutcomeButton(row) { ... }  // removed in Deploy A1
 */
 
-/* Renders the popover into the DOM at document body level. Called from render().
-   Returns empty string if no popover is open. Uses position:fixed so it escapes
-   any modal/parent overflow:hidden. */
-function renderOutcomePopover() {
-  if (!state.outcomePopover) return '';
-  const popover = state.outcomePopover;
-  const row = state.pipeline.find(function (r) { return r.rowId === popover.rowId; });
-  if (!row) return '';
-
-  const isStage1 = row.status === 'Sourced' || row.status === 'Analysed' || row.status === 'Ready to Apply' || isHoldingStatus(row.status);
-  const isApplied = hasBeenApplied(row);
-  const isHeldOrArchived = isHoldingStatus(row.status) || isArchivedStatus(row.status);
-
-  // OUTCOME section: only show for cards that have been applied (Stage 3 territory).
-  // Pre-applied cards can't have interviewing/offer outcomes yet.
-  const outcomeSection = !isStage1
-    ? (
-        '<div class="outcome-popover-section">' +
-          '<p class="outcome-popover-label">Outcome</p>' +
-          '<button class="outcome-popover-item" onclick="handleOutcomePopoverChoice(\'Interviewing\')">Interviewing</button>' +
-          '<button class="outcome-popover-item" onclick="handleOutcomePopoverChoice(\'Interviewed\')">Interviewed</button>' +
-          '<button class="outcome-popover-item" onclick="handleOutcomePopoverChoice(\'Offer\')">Offer</button>' +
-          '<button class="outcome-popover-item" onclick="handleOutcomePopoverChoice(\'Accepted\')">Accepted</button>' +
-          '<button class="outcome-popover-item danger" onclick="handleOutcomePopoverChoice(\'Rejected\')">Rejected</button>' +
-          '<button class="outcome-popover-item danger" onclick="handleOutcomePopoverChoice(\'Withdrawn\')">Withdrawn</button>' +
-        '</div>'
-      )
-    : (
-        '<div class="outcome-popover-section">' +
-          '<p class="outcome-popover-label">Close</p>' +
-          '<button class="outcome-popover-item danger" onclick="handleOutcomePopoverChoice(\'__archive\')">Archive (not pursuing)</button>' +
-        '</div>'
-      );
-
-  // PAUSE section: hold/unsure/rethink. Always shown unless already in one of these.
-  const pauseSection = (
-    '<div class="outcome-popover-section">' +
-      '<p class="outcome-popover-label">Pause</p>' +
-      '<button class="outcome-popover-item" onclick="handleOutcomePopoverChoice(\'On Hold\')">On Hold</button>' +
-      '<button class="outcome-popover-item" onclick="handleOutcomePopoverChoice(\'Unsure\')">Unsure</button>' +
-      '<button class="outcome-popover-item" onclick="handleOutcomePopoverChoice(\'Rethink\')">Rethink</button>' +
-    '</div>'
-  );
-
-  // RESTORE section: only if currently held or archived
-  const restoreSection = isHeldOrArchived
-    ? (
-        '<div class="outcome-popover-section">' +
-          '<button class="outcome-popover-item" onclick="handleOutcomePopoverChoice(\'__restore\')">↩ Back to active</button>' +
-        '</div>'
-      )
-    : '';
-
-  const style = 'left:' + popover.x + 'px;top:' + popover.y + 'px;';
-
-  return (
-    '<div class="outcome-popover-backdrop" onclick="closeOutcomePopover()"></div>' +
-    '<div class="outcome-popover" style="' + style + '" onclick="event.stopPropagation()">' +
-      outcomeSection +
-      pauseSection +
-      restoreSection +
-    '</div>'
-  );
-}
-
-function toggleOutcomePopover(event, rowId) {
-  event.stopPropagation();
-  // If already open for this row, close it
-  if (state.outcomePopover && state.outcomePopover.rowId === rowId) {
-    closeOutcomePopover();
-    return;
-  }
-  // Position popover relative to the trigger button. We render it at fixed
-  // coords below the button, right-aligned to its right edge so it doesn't
-  // overflow the right side of the viewport.
-  const rect = event.currentTarget.getBoundingClientRect();
-  const popoverWidth = 200;
-  const popoverHeight = 320; // estimate; will scroll if longer
-  let x = rect.right - popoverWidth;
-  let y = rect.bottom + 6;
-  // Keep within viewport
-  if (x < 8) x = 8;
-  if (x + popoverWidth > window.innerWidth - 8) x = window.innerWidth - popoverWidth - 8;
-  // If not enough room below, flip above
-  if (y + popoverHeight > window.innerHeight - 8) {
-    y = rect.top - popoverHeight - 6;
-    if (y < 8) y = 8;
-  }
-  state.outcomePopover = { rowId: rowId, x: x, y: y };
-  render();
-}
-
-function closeOutcomePopover() {
-  if (!state.outcomePopover) return;
-  state.outcomePopover = null;
-  render();
-}
-
-function handleOutcomePopoverChoice(value) {
-  if (!state.outcomePopover) return;
-  const rowId = state.outcomePopover.rowId;
-  closeOutcomePopover();
-  if (value === '__restore') {
-    handleHoldChange(rowId, '__restore');
-    return;
-  }
-  if (value === '__archive') {
-    confirmArchive(rowId);
-    return;
-  }
-  // Holding statuses go through hold handler (preserves existing semantics)
-  if (value === 'On Hold' || value === 'Unsure' || value === 'Rethink') {
-    handleHoldChange(rowId, value);
-    return;
-  }
-  // Rejected/Withdrawn route through confirmArchive for the journey-aware flow
-  if (value === 'Rejected' || value === 'Withdrawn') {
-    // For applied cards, give them the "rejected vs withdrew" choice.
-    // For pre-applied cards we never get here (outcome section is hidden).
-    confirmArchive(rowId);
-    return;
-  }
-  // Positive outcomes: log directly
-  handleOutcomeChange(rowId, value);
-}
+/* Log Outcome was removed Apr 29 2026 after the popover system kept
+   breaking. Status changes still happen via:
+   - Mark as Applied (button on Stage 2 modal footer)
+   - Edit Journey (button on the timeline)
+   - Hold/restore via existing handlers
+   The empty stubs below stay in case any cached DOM still has stale
+   onclick handlers; they're cheap and harmless. */
+function renderOutcomePopover() { return ''; }
+function toggleOutcomePopover() {}
+function closeOutcomePopover() {}
+function handleOutcomePopoverChoice() {}
 
 /* ============================================================
    MODALS
@@ -6722,7 +6560,6 @@ function openModal(which, data, opts) {
   renderModal();
 }
 function closeModal() {
-  if (state.outcomePopover) state.outcomePopover = null;
   if (state.modalStack && state.modalStack.length) {
     const parent = state.modalStack.pop();
     state.modalOpen = parent.modalOpen;
@@ -7740,12 +7577,7 @@ function renderStatusTimeline(row) {
     '<div class="status-timeline">' +
       '<div class="timeline-header">' +
         '<p class="timeline-label">Journey</p>' +
-        '<div style="display:flex;gap:6px;align-items:center;">' +
-          '<button class="accent small outcome-trigger" onclick="toggleOutcomePopover(event,' + row.rowId + ')">' +
-            'Log outcome <span style="font-size:9px;opacity:0.8;">▾</span>' +
-          '</button>' +
-          '<button class="small ghost timeline-edit-btn" onclick="openEditJourneyModal(' + row.rowId + ')">Edit</button>' +
-        '</div>' +
+        '<button class="small ghost timeline-edit-btn" onclick="openEditJourneyModal(' + row.rowId + ')">Edit</button>' +
       '</div>' +
       '<div class="timeline-track">' + itemsHtml + '</div>' +
     '</div>'
@@ -8101,14 +7933,9 @@ function _startSaveIndicatorQuips() {
 
 document.addEventListener('keydown', function (e) {
   if (e.key === 'Escape') {
-    if (state.outcomePopover) { closeOutcomePopover(); return; }
     if (state.modalOpen) { closeModal(); return; }
     if (state.applyPrompt) { dismissApplyPrompt(); return; }
   }
-});
-
-window.addEventListener('resize', function () {
-  if (state.outcomePopover) closeOutcomePopover();
 });
 
 // Sticky header drop-shadow + offset: measure the header height and set
