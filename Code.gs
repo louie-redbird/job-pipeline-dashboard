@@ -1,2178 +1,8153 @@
-/**
- * ============================================================
- * JOB PIPELINE DASHBOARD v3 — APPS SCRIPT WEB APP
- * ============================================================
- * Owner:        Louie Radburnd
- * Last updated: 23 April 2026
- * Spec:         job_pipeline_dashboard_v3_spec.md
- *
- * DEPLOYMENT
- * Deploy as Web App. Execute as: Me. Who has access: Anyone.
- * All POST requests use Content-Type: text/plain to bypass CORS
- * preflight. Requests and responses are JSON strings.
- *
- * ENDPOINTS
- * GET  ?action=ping
- * GET  ?action=getPipeline
- * GET  ?action=getRow&rowId=N
- * GET  ?action=getQueue
- * GET  ?action=getPrompt&type=T&rowId=N
- * POST {action: "addToQueue", content, url}
- * POST {action: "removeFromQueue", queueId}
- * POST {action: "clearQueue"}
- * POST {action: "batchAppendAnalysed", tsv}
- * POST {action: "savePhase1Docs", rowId, coverLetterLink, resumeLink}
- * POST {action: "markAsApplied", rowId, submittedResumeContent, submittedCoverLetterContent, appliedVia, applicationDate}
- * POST {action: "saveInterviewPrep", rowId, interviewPrepJson}
- * POST {action: "updateCardStatus", rowId, newStatus}
- * POST {action: "savePersonalAngle", rowId, personalAngle}
- * POST {action: "saveNote", rowId, noteText}
- * POST {action: "appendAnalysedJob", ...}  (legacy, kept for compat)
- * ============================================================
- */
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Job Pipeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   DESIGN TOKENS
+   ============================================================ */
+
+:root {
+  --brand:         #C1272D;
+  --brand-hover:   #A81F24;
+
+  --accent:        #185FA5;
+  --accent-hover:  #0C447C;
+  --accent-soft:   #E6F1FB;
+  --accent-text:   #0C447C;
+
+  --success:       #639922;
+  --success-soft:  #EAF3DE;
+  --success-text:  #3B6D11;
+
+  --warning:       #BA7517;
+  --warning-soft:  #FAEEDA;
+  --warning-text:  #633806;
+
+  --danger:        #A32D2D;
+  --danger-soft:   #FCEBEB;
+  --danger-text:   #791F1F;
+
+  --teal:          #1D9E75;
+  --teal-soft:     #E1F5EE;
+  --teal-text:     #085041;
+
+  --purple:        #534AB7;
+  --purple-soft:   #EEEDFE;
+  --purple-text:   #3C3489;
+
+  --bg:            #FAFAF7;
+  --bg-elevated:   #FFFFFF;
+  --bg-secondary:  #F1EFE8;
+  --bg-tertiary:   #E4E1D8;
+  --bg-inset:      #FAF9F6;
+
+  --text:          #1C1C1C;
+  --text-sec:      #5C5C5A;
+  --text-ter:      #8E8E8B;
+
+  --border:        rgba(28, 28, 28, 0.09);
+  --border-strong: rgba(28, 28, 28, 0.15);
+  --border-hover:  rgba(28, 28, 28, 0.24);
+
+  --shadow-xs:     0 1px 2px rgba(28, 28, 28, 0.03);
+  --shadow-sm:     0 1px 3px rgba(28, 28, 28, 0.04), 0 1px 2px rgba(28, 28, 28, 0.03);
+  --shadow-md:     0 4px 10px rgba(28, 28, 28, 0.05), 0 2px 4px rgba(28, 28, 28, 0.03);
+  --shadow-lg:     0 14px 30px rgba(28, 28, 28, 0.09), 0 4px 10px rgba(28, 28, 28, 0.05);
+  --shadow-xl:     0 28px 56px rgba(28, 28, 28, 0.12), 0 10px 22px rgba(28, 28, 28, 0.07);
+
+  --ease:          cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out:      cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring:   cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-fast: 140ms;
+  --duration:      200ms;
+  --duration-slow: 320ms;
+
+  --r-sm:          6px;
+  --r-md:          10px;
+  --r-lg:          14px;
+  --r-xl:          20px;
+  --r-full:        999px;
+
+  --bg-sec:        var(--bg-secondary);
+  --accent-bg:     var(--accent-soft);
+  --teal-bg:       var(--teal-soft);
+  --amber:         var(--warning);
+  --amber-bg:      var(--warning-soft);
+  --amber-text:    var(--warning-text);
+  --amber-soft:    var(--warning-soft);
+  --green:         var(--success);
+  --green-bg:      var(--success-soft);
+  --green-text:    var(--success-text);
+  --green-soft:    var(--success-soft);
+  --red:           var(--danger);
+  --red-bg:        var(--danger-soft);
+  --red-text:      var(--danger-text);
+  --red-soft:      var(--danger-soft);
+  --purple-bg:     var(--purple-soft);
+  --grey-50:       var(--bg);
+  --grey-100:      var(--bg-secondary);
+  --grey-200:      var(--bg-tertiary);
+  --grey-300:      #D4D0C4;
+  --grey-400:      var(--text-ter);
+  --grey-500:      var(--text-sec);
+  --grey-700:      var(--text);
+  --grey-900:      var(--text);
+  --radius-sm:     var(--r-sm);
+  --radius-md:     var(--r-md);
+  --radius-lg:     var(--r-lg);
+  --transition:    var(--duration) var(--ease);
+}
+
+[data-theme="dark"] {
+  --bg:            #0C0F1A;
+  --bg-elevated:   #131726;
+  --bg-secondary:  #181D2E;
+  --bg-tertiary:   #232940;
+  --bg-inset:      #0F121E;
+
+  --text:          #E2E8F0;
+  --text-sec:      #94A3B8;
+  --text-ter:      #64748B;
+
+  --border:        rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.10);
+  --border-hover:  rgba(255, 255, 255, 0.20);
+
+  --shadow-xs:     0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm:     0 1px 3px rgba(0, 0, 0, 0.45);
+  --shadow-md:     0 4px 12px rgba(0, 0, 0, 0.55);
+  --shadow-lg:     0 16px 36px rgba(0, 0, 0, 0.65);
+  --shadow-xl:     0 28px 60px rgba(0, 0, 0, 0.75);
+
+  --accent:        #818CF8;
+  --accent-hover:  #A5B4FC;
+  --accent-soft:   rgba(129, 140, 248, 0.14);
+  --accent-text:   #C7D2FE;
+
+  --success:       #4ADE80;
+  --success-soft:  rgba(74, 222, 128, 0.14);
+  --success-text:  #86EFAC;
+
+  --warning:       #FBBF24;
+  --warning-soft:  rgba(251, 191, 36, 0.14);
+  --warning-text:  #FDE68A;
+
+  --danger:        #F87171;
+  --danger-soft:   rgba(248, 113, 113, 0.14);
+  --danger-text:   #FCA5A5;
+
+  --teal:          #22D3EE;
+  --teal-soft:     rgba(34, 211, 238, 0.14);
+  --teal-text:     #67E8F9;
+
+  --purple:        #A78BFA;
+  --purple-soft:   rgba(167, 139, 250, 0.14);
+  --purple-text:   #C4B5FD;
+
+  --brand:         #D84851;
+  --brand-hover:   #E66A71;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+/* Viewport lock — prevents any descendant\'s padding, border, or negative
+   margin from forcing horizontal document width beyond viewport on mobile. */
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+body {
+  margin: 0;
+  padding: 32px 28px 48px;
+  font-family: 'DM Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
+  font-weight: 450;
+  color: var(--text);
+  background: var(--bg);
+  line-height: 1.55;
+  letter-spacing: -0.005em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
+  transition: background var(--duration) var(--ease);
+  min-height: 100vh;
+  /* Prevent horizontal scroll on mobile from pseudo-element backgrounds
+     (header::before, notification-zone::before both use left/right: -50vw)
+     and from column lane negative margins. Without this, any descendant
+     wider than the viewport causes the whole body to scroll sideways. */
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+body.modal-open { overflow: hidden; }
+p { margin: 0; }
+::selection { background: var(--accent-soft); color: var(--accent-text); }
+
+/* ============================================================
+   BUTTONS
+   ============================================================ */
+
+button {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease);
+  white-space: nowrap;
+  letter-spacing: -0.005em;
+  line-height: 1.4;
+}
+button:hover:not(:disabled) { background: var(--bg-secondary); border-color: var(--border-hover); color: var(--text); }
+button:active:not(:disabled) { transform: translateY(0.5px); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button.primary { background: var(--text); color: var(--bg-elevated); border-color: var(--text); }
+button.primary:hover:not(:disabled) { background: var(--text); filter: brightness(1.15); border-color: var(--text); color: var(--bg-elevated); }
+button.accent { background: var(--accent); color: #FFFFFF; border-color: var(--accent); }
+button.accent:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); color: #FFFFFF; }
+button.ghost { background: transparent; border-color: transparent; padding: 6px 10px; }
+button.ghost:hover:not(:disabled) { background: var(--bg-secondary); border-color: transparent; }
+button.danger { color: var(--danger-text); }
+button.danger:hover:not(:disabled) { background: var(--danger-soft); border-color: var(--danger); color: var(--danger-text); }
+button.small { font-size: 12px; padding: 4px 9px; border-radius: var(--r-sm); }
+button.icon { padding: 0; width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; }
+
+select {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 7px 28px 7px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  background: var(--bg-elevated);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235F5F63' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  color: var(--text);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: all var(--duration-fast) var(--ease);
+  letter-spacing: -0.005em;
+}
+select:hover { border-color: var(--border-hover); }
+[data-theme="dark"] select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23A1A1AA' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); }
+
+input[type="text"], input[type="url"], input[type="date"], textarea {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  background: var(--bg-elevated);
+  color: var(--text);
+  width: 100%;
+  line-height: 1.5;
+  letter-spacing: -0.005em;
+  transition: all var(--duration-fast) var(--ease);
+}
+textarea { resize: vertical; font-family: inherit; }
+textarea.mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+input:hover, textarea:hover { border-color: var(--border-hover); }
+input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+input::placeholder, textarea::placeholder { color: var(--text-ter); }
+
+.wrap { max-width: 1440px; margin-left: auto; margin-right: auto; overflow-x: hidden; }
+
+/* Prevent cards from being pushed wider than their grid/flex cell by long
+   unbreakable strings (e.g. salary ranges, long URLs). Content inside
+   cards wraps properly; the card itself never exceeds its container. */
+.card { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+.card-role, .card-company, .card-details {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* ============================================================
+   LOADING ANIMATION — playful job-hunt themed loader. Used both for
+   the initial page load ("Loading pipeline") and as a floating corner
+   indicator during save/refresh operations. Quips rotate every ~2s
+   to keep it feeling alive while slow operations run.
+   ============================================================ */
+.wrap.loading {
+  min-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  padding: 80px 20px;
+  color: var(--text-sec);
+}
+.loading-visual {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+/* Three bars that rise-and-fall like a bar chart — the motif matches
+   the brand mark (three staggered rectangles). Each bar animates on
+   a slight delay so the group feels like a pulse, not a march. */
+.loading-bar {
+  width: 10px;
+  height: 14px;
+  border-radius: 3px;
+  background: var(--accent);
+  animation: loading-bar-pulse 1.1s ease-in-out infinite;
+}
+.loading-bar:nth-child(1) { background: #94A3B8; animation-delay: 0s; }
+.loading-bar:nth-child(2) { background: var(--accent); animation-delay: 0.15s; }
+.loading-bar:nth-child(3) { background: var(--purple); animation-delay: 0.3s; }
+@keyframes loading-bar-pulse {
+  0%, 100% { height: 14px; opacity: 0.55; }
+  50%      { height: 32px; opacity: 1;    }
+}
+.loading-quip {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-sec);
+  letter-spacing: -0.005em;
+  text-align: center;
+  min-height: 21px;  /* reserve space so rotation doesn\'t jump */
+  animation: loading-quip-fade 0.4s ease-out;
+}
+@keyframes loading-quip-fade {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+.loading-sub {
+  font-size: 11.5px;
+  color: var(--text-ter);
+  font-style: italic;
+}
+
+/* SAVE INDICATOR — small floating pill that appears in the top-right
+   during save/refresh operations. Slides in, rotates quips, slides out. */
+.save-indicator {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px 9px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-full);
+  box-shadow: 0 6px 20px rgba(28,28,28,0.08);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-sec);
+  animation: save-indicator-slide 0.3s var(--ease);
+  max-width: 320px;
+}
+.save-indicator .loading-bar { width: 4px; height: 8px; border-radius: 1.5px; }
+.save-indicator .loading-bar:nth-child(1) { background: #94A3B8; }
+.save-indicator .loading-bar:nth-child(2) { background: var(--accent); }
+.save-indicator .loading-bar:nth-child(3) { background: var(--purple); }
+.save-indicator-bars {
+  display: flex;
+  gap: 3px;
+  align-items: flex-end;
+}
+.save-indicator-bars .loading-bar {
+  animation: loading-bar-pulse-small 1.1s ease-in-out infinite;
+}
+.save-indicator-bars .loading-bar:nth-child(1) { animation-delay: 0s; }
+.save-indicator-bars .loading-bar:nth-child(2) { animation-delay: 0.15s; }
+.save-indicator-bars .loading-bar:nth-child(3) { animation-delay: 0.3s; }
+@keyframes loading-bar-pulse-small {
+  0%, 100% { height: 8px; opacity: 0.55; }
+  50%      { height: 18px; opacity: 1;   }
+}
+@keyframes save-indicator-slide {
+  from { opacity: 0; transform: translateX(30px); }
+  to   { opacity: 1; transform: translateX(0);    }
+}
+.save-indicator.hiding { animation: save-indicator-slide-out 0.25s var(--ease) forwards; }
+@keyframes save-indicator-slide-out {
+  to { opacity: 0; transform: translateX(30px); }
+}
+[data-theme="dark"] .save-indicator { box-shadow: 0 6px 20px rgba(0,0,0,0.5); }
+
+@media (max-width: 480px) {
+  .save-indicator {
+    top: auto;
+    bottom: calc(96px + env(safe-area-inset-bottom, 0px));  /* above mobile tab bar */
+    right: 12px;
+    left: 12px;
+    max-width: none;
+    justify-content: center;
+  }
+}
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-bottom: 20px;
+  padding: 14px 0 16px;
+  border-bottom: 1px solid var(--border);
+  /* STICKY: header + action bar + funnel column headers stick at top on scroll. */
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--bg-secondary);
+  backdrop-filter: blur(8px) saturate(1.1);
+  -webkit-backdrop-filter: blur(8px) saturate(1.1);
+  margin-top: -24px;
+  padding-top: 18px;
+}
+/* Header background extends horizontally beyond .wrap so coloured column
+   washes can\'t bleed through on either side when scrolled. Warm grey
+   tint (--bg-secondary) makes the header stand out from the page body
+   without shouting — distinguishes "nav band" from "content area". */
+.header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: -1px;  /* cover the header\'s own border */
+  left: -50vw;
+  right: -50vw;
+  background: var(--bg-secondary);
+  z-index: -1;
+  border-bottom: 1px solid var(--border);
+}
+[data-theme="dark"] .header::before { background: #181D2E; }
+/* When the page is scrolled and the sticky header is floating, add a subtle
+   shadow so it visually separates from the scrolled content */
+.header.is-stuck {
+  box-shadow: 0 4px 14px rgba(28,28,28,0.04);
+  border-bottom-color: var(--border-strong);
+}
+[data-theme="dark"] .header { background: rgba(12,15,26,0.92); }
+[data-theme="dark"] .header.is-stuck { box-shadow: 0 4px 14px rgba(0,0,0,0.45); }
+
+/* HEADER GRID — 3 columns aligned to the stats panel in the middle.
+   Left column: brand at top, action controls (search/batch/+add/refresh)
+   at bottom so they bottom-align with the stats panel.
+   Middle column: stats panel (defines the vertical height).
+   Right column: icon-only quick links, top-aligned with stats panel.
+   
+   `align-items: stretch` ensures left/right columns span the full height
+   of whichever column is tallest (the stats panel); then inside each
+   side column, a flex layout with space-between pins children top/bottom. */
+.header-grid {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: stretch;
+  gap: 20px;
+}
+.header-col-left {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+}
+.header-col-centre {
+  display: flex;
+  align-items: center;
+  justify-self: center;
+}
+.header-col-right {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 10px;
+  min-width: 0;
+  position: relative;  /* anchor for absolutely-positioned header-menu drawer */
+}
+.header-col-right .action-controls { justify-content: flex-end; }
+
+/* BRAND — logo mark + wordmark + subtitle.
+   Mark: gradient-filled ascending bars (stylised pipeline / growth motif).
+   Wordmark: name with a coloured period ("Radburnd.") + lighter weight
+   suffix so the name is the hero. Subtle hover lift on the whole brand
+   block to give it a bit of life. */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.brand-mark {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  background: linear-gradient(135deg, var(--accent-soft) 0%, color-mix(in srgb, var(--accent) 16%, transparent) 100%);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+  border-radius: 10px;
+  padding: 8px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.4),
+    0 1px 2px rgba(28,28,28,0.06);
+  transition: transform var(--duration-fast) var(--ease), box-shadow var(--duration-fast) var(--ease);
+}
+.brand-mark:hover {
+  transform: translateY(-1px) rotate(-2deg);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.4),
+    0 4px 10px rgba(28,28,28,0.1);
+}
+[data-theme="dark"] .brand-mark {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 18%, transparent) 0%, color-mix(in srgb, var(--accent) 8%, transparent) 100%);
+  border-color: color-mix(in srgb, var(--accent) 32%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.06),
+    0 1px 2px rgba(0,0,0,0.3);
+}
+.brand-mark svg { width: 100%; height: 100%; display: block; }
+.brand-text { min-width: 0; }
+.header-title {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  margin: 0 0 3px;
+  color: var(--text);
+  line-height: 1;
+  font-feature-settings: 'ss01' on, 'cv11' on;
+}
+.brand-dot {
+  color: var(--accent);
+  display: inline-block;
+  transform: translateY(-1px);
+  font-weight: 900;
+}
+.brand-suffix {
+  font-weight: 400;
+  color: var(--text-sec);
+  letter-spacing: -0.025em;
+  opacity: 0.75;
+}
+.header-subtitle {
+  font-size: 12.5px;
+  color: var(--text-sec);
+  letter-spacing: -0.005em;
+  font-weight: 500;
+  font-feature-settings: 'tnum' on;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.header-subtitle b {
+  font-weight: 700;
+  color: var(--text);
+  margin-right: 2px;
+}
+.subtitle-sep { color: var(--text-ter); opacity: 0.7; }
+.avg-fit-inline { font-weight: 700; letter-spacing: -0.005em; }
+
+/* ============================================================
+   HEADER ACTIONS — Today pill, + Add button, hamburger
+   ============================================================ */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+/* Today pill — sits at the top of the right column, always visible.
+   Shows progress ring (via conic-gradient) + fraction + optional streak.
+   Click opens the Today modal. */
+.today-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  cursor: pointer;
+  color: var(--text-sec);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  transition: background var(--duration-fast) var(--ease), border-color var(--duration-fast) var(--ease);
+  white-space: nowrap;
+}
+.today-pill:hover {
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-elevated));
+  border-color: var(--accent);
+  color: var(--text);
+}
+.today-pill.complete {
+  background: color-mix(in srgb, var(--success) 10%, var(--bg-elevated));
+  border-color: var(--success);
+  color: var(--success-text);
+}
+.today-pill-ring {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background:
+    conic-gradient(var(--accent) calc(var(--pct, 0) * 1%), var(--border) 0);
+  position: relative;
+  flex-shrink: 0;
+}
+.today-pill-ring::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+}
+.today-pill.complete .today-pill-ring {
+  background: conic-gradient(var(--success) 100%, var(--border) 0);
+}
+.today-pill.complete .today-pill-ring::after {
+  background: color-mix(in srgb, var(--success) 10%, var(--bg-elevated));
+}
+.today-pill-label { font-size: 12px; }
+.today-pill-label b { font-weight: 700; margin-left: 3px; color: var(--text); }
+.today-pill.complete .today-pill-label b { color: var(--success-text); }
+.today-pill-streak {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--warning-text);
+  padding-left: 6px;
+  border-left: 1px solid var(--border);
+  margin-left: 2px;
+}
+
+/* Primary + Add button — kept prominent at all breakpoints */
+.header-add-btn {
+  height: 34px;
+  padding: 0 14px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* Dev button — opens a meta-prompt for starting tech-change chats.
+   Sized to match header-burger height with a short label beside the icon. */
+.header-dev-btn {
+  height: 34px;
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  color: var(--text-sec);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  transition: background var(--duration-fast) var(--ease), border-color var(--duration-fast) var(--ease), color var(--duration-fast) var(--ease);
+  white-space: nowrap;
+}
+.header-dev-btn:hover {
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-elevated));
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.header-dev-btn svg { flex-shrink: 0; }
+@media (max-width: 480px) {
+  /* On narrow mobile, hide the Dev button entirely — tech updates are a
+     desktop activity and the header is already tight at this width. */
+  .header-actions > .header-dev-btn { display: none; }
+}
+
+/* Hamburger trigger — opens header-menu drawer */
+.header-burger {
+  width: 38px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  color: var(--text-sec);
+  padding: 0;
+  transition: background var(--duration-fast) var(--ease), border-color var(--duration-fast) var(--ease);
+}
+.header-burger:hover {
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-elevated));
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.header-burger[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-elevated));
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Header-menu drawer — appears beneath the hamburger. Absolutely
+   positioned within the header\'s right column. On mobile it spans the
+   full header width. */
+.header-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 10px;
+  width: 340px;
+  max-width: calc(100vw - 24px);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  box-shadow: 0 12px 40px rgba(28,28,28,0.12);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: header-menu-slide 0.2s var(--ease);
+}
+[data-theme="dark"] .header-menu { box-shadow: 0 12px 40px rgba(0,0,0,0.5); }
+@keyframes header-menu-slide {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+.header-menu-section {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.header-menu-section:last-child { border-bottom: none; }
+/* Mobile-only sections inside the drawer — hidden on desktop since Today
+   pill and + Add jobs live in the header top bar at wider viewports. */
+.header-menu-mobile-only { display: none; }
+.header-menu-section input.search-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+.header-menu-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.header-menu-icon {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  color: var(--text-sec);
+  padding: 0;
+}
+.header-menu-icon:hover { border-color: var(--accent); color: var(--accent); }
+.header-menu-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-ter);
+  margin-bottom: 8px;
+}
+.header-menu-links {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+.header-menu-links .quick-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 9px;
+  font-size: 12px;
+  color: var(--text-sec);
+  text-decoration: none;
+  border-radius: var(--r-sm);
+  transition: background var(--duration-fast) var(--ease), color var(--duration-fast) var(--ease);
+}
+.header-menu-links .quick-link:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+.header-menu-links .quick-link svg { flex-shrink: 0; }
+.header-menu-links .quick-link span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ============================================================
+   TODAY MODAL
+   ============================================================ */
+.today-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 10, 12, 0.42);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 80px 20px 40px;
+  z-index: 200;
+  animation: today-modal-fade 0.2s var(--ease);
+}
+@keyframes today-modal-fade {
+  from { opacity: 0; } to { opacity: 1; }
+}
+.today-modal {
+  width: 100%;
+  max-width: 520px;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-lg);
+  box-shadow: 0 24px 60px rgba(28,28,28,0.18);
+  overflow: hidden;
+  animation: today-modal-rise 0.25s var(--ease);
+}
+[data-theme="dark"] .today-modal { box-shadow: 0 24px 60px rgba(0,0,0,0.6); }
+@keyframes today-modal-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+.today-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.today-modal-eyebrow {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-ter);
+  margin: 0 0 4px;
+  font-weight: 600;
+}
+.today-modal-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+.today-modal-body { padding: 20px 24px 24px; max-height: 60vh; overflow-y: auto; }
+.today-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.today-progress-bar {
+  height: 8px;
+  background: var(--bg-inset);
+  border-radius: var(--r-full);
+  overflow: hidden;
+}
+.today-progress-fill {
+  height: 100%;
+  background: linear-gradient(to right, var(--accent), color-mix(in srgb, var(--accent) 70%, var(--purple)));
+  border-radius: var(--r-full);
+  transition: width 0.4s var(--ease);
+}
+.today-progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: var(--text-sec);
+}
+.today-progress-pct { font-weight: 700; color: var(--text); font-size: 14px; }
+.today-streak {
+  font-weight: 700;
+  color: var(--warning-text);
+  font-size: 12.5px;
+  padding: 2px 10px;
+  background: var(--warning-soft);
+  border-radius: var(--r-full);
+}
+.today-streak-placeholder { color: var(--text-ter); font-size: 11.5px; font-style: italic; }
+
+.today-tasks { display: flex; flex-direction: column; gap: 10px; }
+.today-task {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 14px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  transition: all var(--duration-fast) var(--ease);
+}
+.today-task.done {
+  opacity: 0.55;
+  background: var(--bg-inset);
+}
+.today-task.done .today-task-title {
+  text-decoration: line-through;
+  color: var(--text-ter);
+}
+.today-task-check {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--bg);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--success-text);
+  padding: 0;
+  transition: all var(--duration-fast) var(--ease);
+}
+.today-task-check:hover { border-color: var(--accent); }
+.today-task.done .today-task-check {
+  background: var(--success-soft);
+  border-color: var(--success);
+  /* Tick icon pulses once when the task flips to done. The svg inside
+     scales 0 → 1.2 → 1 over 280ms so completion feels rewarding without
+     becoming a distraction on subsequent re-renders. Animation only runs
+     on the .done state, so unticking and re-ticking re-triggers it. */
+  animation: today-task-pop 0.35s var(--ease-spring);
+}
+.today-task.done .today-task-check svg {
+  animation: today-task-tick-in 0.32s var(--ease-spring);
+}
+@keyframes today-task-pop {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+@keyframes today-task-tick-in {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.today-task-body { flex: 1; min-width: 0; }
+.today-task-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 3px;
+  letter-spacing: -0.005em;
+}
+.today-task-subtitle {
+  font-size: 12px;
+  color: var(--text-ter);
+  margin: 0 0 8px;
+  line-height: 1.45;
+}
+.today-task-action {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-text);
+  background: transparent;
+  border: none;
+  padding: 2px 0;
+  cursor: pointer;
+}
+.today-task-action:hover { text-decoration: underline; }
+
+.today-empty {
+  text-align: center;
+  padding: 30px 20px;
+  color: var(--text-sec);
+}
+.today-empty p { margin: 0 0 12px; }
+.today-modal-footer {
+  display: flex;
+  gap: 10px;
+  padding: 14px 24px 18px;
+  border-top: 1px solid var(--border);
+  justify-content: flex-end;
+}
+
+/* STATS MATRIX — 4-column grid: row labels + three data columns.
+   Column headers on top row, row labels in the leftmost column, values in
+   the other nine cells. Total row gets subtle emphasis (heavier weight,
+   top border) so at-a-glance you see lifetime figures distinctly from
+   the time-window rows. */
+/* STATS PANEL — centre-header tabs (Total / Last 7 days / Yesterday) with
+   3 big numbers below. Swapped from a 3x3 matrix to tabs because the matrix
+   exposed 9 numbers at once which diluted the signal — now you pick the
+   time window and see 3 clean numbers. */
+.stats-panel {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 0;
+  box-shadow: var(--shadow-xs);
+  flex-shrink: 0;
+  overflow: hidden;
+  min-width: 400px;
+}
+.stats-tabs {
+  display: flex;
+  gap: 0;
+  background: var(--bg-inset);
+  border-bottom: 1px solid var(--border);
+}
+.stats-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 7px 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-ter);
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease);
+  text-align: center;
+  white-space: nowrap;
+}
+.stats-tab:hover { color: var(--text-sec); background: var(--bg-elevated); }
+.stats-tab.active {
+  color: var(--accent-text);
+  background: var(--bg-elevated);
+  border-bottom-color: var(--accent);
+}
+.stats-values {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 10px 10px 12px;
+  gap: 8px;
+}
+.stats-value-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  text-align: center;
+}
+.stats-value-num {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  line-height: 1;
+}
+.stats-value-num.accent  { color: var(--accent); }
+.stats-value-num.success { color: var(--success); }
+.stats-value-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--text-ter);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.quick-links { display: flex; gap: 6px; flex-wrap: wrap; }
+.quick-link { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 500; color: var(--text-sec); background: var(--bg-elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 6px 11px; text-decoration: none; transition: all var(--duration-fast) var(--ease); letter-spacing: -0.005em; }
+.quick-link:hover { color: var(--text); border-color: var(--border-hover); background: var(--bg-secondary); }
+.quick-link svg { color: var(--text-ter); transition: color var(--duration-fast) var(--ease); }
+.quick-link:hover svg { color: var(--text-sec); }
+
+/* Icon-only variant used in the top header (right side). Square, no label. */
+.quick-link.icon-only { padding: 7px; border-radius: var(--r-md); gap: 0; }
+.quick-link.icon-only:hover { transform: translateY(-1px); box-shadow: var(--shadow-xs); }
+.quick-links-compact { gap: 5px; flex-shrink: 0; }
 
 
-// ============================================================
-// CONFIGURATION
-// ============================================================
+.action-controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-start; }
+.header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 
-const SHEET_ID      = '13cSuuItK8YfiNGa9xJDN3Eds4zOHVsUHtWQGyu0h53M';
-const PIPELINE_TAB  = 'Job Pipeline v2';
-const QUEUE_TAB     = 'Intake Queue';
-const TOTAL_COLS    = 38;
+.theme-toggle { width: 34px; height: 34px; border-radius: var(--r-md); display: inline-flex; align-items: center; justify-content: center; background: var(--bg-elevated); border: 1px solid var(--border-strong); cursor: pointer; padding: 0; color: var(--text-sec); transition: all var(--duration-fast) var(--ease); flex-shrink: 0; }
+.theme-toggle:hover { color: var(--text); border-color: var(--border-hover); background: var(--bg-secondary); }
+.theme-toggle svg { width: 15px; height: 15px; }
 
-const COL = {
-  STATUS:                      1,
-  COMPANY:                     2,
-  ROLE:                        3,
-  FIT_SCORE:                   4,
-  RECOMMENDATION:              5,
-  URL:                         6,
-  KEY_NOTES:                   7,
-  COMPANY_INTEL:               8,
-  SALARY:                      9,
-  SALARY_EXPECTATION:         10,
-  LOCATION:                   11,
-  WORK_ARRANGEMENT:           12,
-  KEY_ALIGNMENTS:             13,
-  POTENTIAL_CONCERNS:         14,
-  APPLICATION_PRIORITY:       15,
-  TAILORED_PITCH:             16,
-  ANALYSIS_DATE:              17,
-  CULTURAL_FIT:               18,
-  RESUME_MD:                  19,
-  COVER_LETTER_MD:            20,
-  SUBMITTED_RESUME_LINK:      21,
-  SUBMITTED_COVER_LETTER_LINK:22,
-  INTERVIEW_PREP:             23,
-  LINKEDIN_CONTACTS_LINK:     24,
-  LAST_ACTIVITY:              25,
-  YOUR_NOTES:                 26,
-  DUPLICATE_CHECK:            27,
-  APPLICATION_DATE:           28,
-  APPLICATION_METHOD:         29,
-  FOLLOW_UP_DATE:             30,
-  DATE_ADDED:                 31,
-  CONTACT_NAME:               32,
-  CONTACT_EMAIL:              33,
-  CONTACT_LINKEDIN:           34,
-  PERSONAL_ANGLE:             35,
-  AD_CONTENT:                 36,
-  STAGE_ENTERED_AT:           37,
-  STATUS_HISTORY:             38
+/* ============================================================
+   QUEUE STRIP
+   ============================================================ */
+
+.queue-strip { background: var(--bg-elevated); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--r-md); padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; box-shadow: var(--shadow-xs); gap: 16px; }
+.queue-strip-text { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0; }
+.queue-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); flex-shrink: 0; }
+.queue-label { font-size: 14px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
+.queue-breakdown { font-size: 12px; color: var(--text-sec); font-weight: 500; }
+.queue-strip-actions { display: flex; gap: 8px; }
+
+/* ============================================================
+   FUNNEL
+   ============================================================ */
+
+.funnel { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 36px; margin-bottom: 28px; }
+.funnel > * { min-width: 0; }
+.column { min-width: 0; display: flex; flex-direction: column; }
+.column-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 2px 12px;
+  gap: 8px;
+  position: sticky;
+  top: var(--sticky-offset, 180px);
+  z-index: 10;
+  background: var(--bg);
+  /* Subtle fade edge so cards passing behind don't bleed straight into
+     the column title */
+  background: linear-gradient(to bottom, var(--bg) 0%, var(--bg) 85%, rgba(250,250,247,0) 100%);
+}
+[data-theme="dark"] .column-header {
+  background: linear-gradient(to bottom, var(--bg) 0%, var(--bg) 85%, rgba(12,15,26,0) 100%);
+}
+.column-title-row { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+.column-stage-bar { width: 4px; height: 18px; border-radius: var(--r-full); background: var(--text-ter); }
+.column.column-potential .column-stage-bar  { background: #94A3B8; }
+.column.column-applied .column-stage-bar    { background: var(--accent); }
+.column.column-engagement .column-stage-bar { background: var(--purple); }
+.column-title {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--text);
+}
+.column.column-potential .column-title  { color: #64748B; }
+.column.column-applied .column-title    { color: var(--accent-text); }
+.column.column-engagement .column-title { color: var(--purple-text, var(--purple)); }
+.column-count { font-size: 12px; font-weight: 600; background: var(--bg-secondary); padding: 2px 10px; border-radius: var(--r-full); color: var(--text-sec); min-width: 28px; text-align: center; }
+
+.sort-select { font-size: 11px; font-weight: 500; padding: 3px 22px 3px 9px; background-position: right 7px center; background-size: 10px; color: var(--text-sec); border-color: var(--border); background-color: transparent; }
+.sort-select:hover { color: var(--text); border-color: var(--border-strong); background-color: var(--bg-elevated); }
+
+/* Sort menu — icon button with popover dropdown replacing the old select */
+.sort-menu { position: relative; }
+.sort-icon-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  color: var(--text-ter);
+  padding: 0;
+  transition: all var(--duration-fast) var(--ease);
+}
+.sort-icon-btn:hover { color: var(--text); background: var(--bg-elevated); border-color: var(--border-strong); }
+.sort-icon-btn[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); background: var(--bg-elevated); }
+.sort-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  box-shadow: 0 6px 18px rgba(28,28,28,0.1);
+  z-index: 30;
+  min-width: 120px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  animation: header-menu-slide 0.15s var(--ease);
+}
+[data-theme="dark"] .sort-menu-dropdown { box-shadow: 0 6px 18px rgba(0,0,0,0.4); }
+.sort-menu-item {
+  background: transparent;
+  border: none;
+  padding: 7px 10px;
+  font-size: 12px;
+  color: var(--text-sec);
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--r-xs, 4px);
+  font-family: inherit;
+  transition: background var(--duration-fast) var(--ease);
+}
+.sort-menu-item:hover { background: var(--bg); color: var(--text); }
+.sort-menu-item.active { background: var(--accent-soft); color: var(--accent-text); font-weight: 600; }
+
+/* Outcome popover — unified replacement for Hold dropdown + Log outcome dropdown + Archive button.
+   Uses position: fixed with JS-set coords so it escapes any parent overflow:hidden / clipping. */
+.outcome-trigger { display: inline-flex; align-items: center; gap: 5px; }
+.outcome-popover {
+  position: fixed;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  box-shadow: 0 8px 24px rgba(28,28,28,0.12);
+  z-index: 1000;
+  min-width: 200px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  animation: header-menu-slide 0.15s var(--ease);
+}
+[data-theme="dark"] .outcome-popover { box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+.outcome-popover-section { display: flex; flex-direction: column; padding: 4px 0; }
+.outcome-popover-section + .outcome-popover-section { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 8px; }
+.outcome-popover-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-ter);
+  font-weight: 600;
+  padding: 4px 12px 6px;
+  margin: 0;
+}
+.outcome-popover-item {
+  background: transparent;
+  border: none;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--r-sm);
+  font-family: inherit;
+  transition: background var(--duration-fast) var(--ease);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.outcome-popover-item:hover { background: var(--bg); }
+.outcome-popover-item.danger { color: var(--danger-text); }
+.outcome-popover-item.danger:hover { background: var(--danger-soft); }
+.outcome-popover-backdrop { position: fixed; inset: 0; z-index: 999; background: transparent; }
+.column-cards { display: flex; flex-direction: column; gap: 8px; }
+
+/* COLUMN LANE TINTS — soft 4-6% opacity wash behind each column so the
+   three lanes (Analysed / Ready to Apply / Applied) are recognisable at
+   a glance without reading headers. Tints sit on the .column wrapper so
+   they cover the header area + cards area uniformly. Padding + negative
+   margin keeps the visual lane wider than the cards alone for a cleaner
+   "lane" feel. Border-radius softens the edges. */
+/* COLUMN LANE TINTS — each column carries a subtle wash matching its
+   overall stage identity. This is the "base" wash — always on. When a
+   single-tab is active, a stronger status-specific wash layers on top
+   via column-tint-* classes below. On the All tab, only the base lane
+   wash shows, and individual sections inside carry their own colour. */
+.column.column-potential  { background: color-mix(in srgb, #94A3B8 4%, transparent); }
+.column.column-applied    { background: color-mix(in srgb, var(--accent) 4%, transparent); }
+.column.column-engagement { background: color-mix(in srgb, var(--purple) 4%, transparent); }
+
+[data-theme="dark"] .column.column-potential  { background: color-mix(in srgb, #94A3B8 7%, transparent); }
+[data-theme="dark"] .column.column-applied    { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+[data-theme="dark"] .column.column-engagement { background: color-mix(in srgb, var(--purple) 7%, transparent); }
+
+.column.column-potential,
+.column.column-applied,
+.column.column-engagement {
+  padding: 12px 10px 14px;
+  margin: 0 -10px;
+  border-radius: var(--r-md);
+  position: relative;
+  transition: background var(--duration-fast) var(--ease);
+}
+
+/* COLUMN TINT (STRONGER) — applied when a specific status tab is active.
+   Overrides the base lane wash. Tints use the status\'s colour family at
+   a higher opacity than the base lane so the active tab reads clearly. */
+.column.column-tint-sourced        { background: color-mix(in srgb, #94A3B8 8%, transparent); }
+.column.column-tint-analysed       { background: color-mix(in srgb, #94A3B8 8%, transparent); }
+.column.column-tint-ready-to-apply { background: color-mix(in srgb, var(--success) 9%, transparent); }
+.column.column-tint-applied        { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.column.column-tint-interviewing   { background: color-mix(in srgb, var(--purple) 8%, transparent); }
+.column.column-tint-interviewed    { background: color-mix(in srgb, var(--purple) 8%, transparent); }
+.column.column-tint-offer          { background: color-mix(in srgb, var(--teal) 8%, transparent); }
+.column.column-tint-accepted       { background: color-mix(in srgb, var(--success) 9%, transparent); }
+.column.column-tint-rejected       { background: color-mix(in srgb, var(--danger) 7%, transparent); }
+
+/* Applied column age-bucket tints (for Recent/Follow up/Ghosted tabs) */
+.column.column-tint-recent    { background: color-mix(in srgb, var(--success) 8%, transparent); }
+.column.column-tint-followup  { background: color-mix(in srgb, var(--warning) 8%, transparent); }
+.column.column-tint-ghosted   { background: color-mix(in srgb, var(--danger) 7%, transparent); }
+
+[data-theme="dark"] .column.column-tint-sourced        { background: color-mix(in srgb, #94A3B8 12%, transparent); }
+[data-theme="dark"] .column.column-tint-analysed       { background: color-mix(in srgb, #94A3B8 12%, transparent); }
+[data-theme="dark"] .column.column-tint-ready-to-apply { background: color-mix(in srgb, var(--success) 13%, transparent); }
+[data-theme="dark"] .column.column-tint-applied        { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+[data-theme="dark"] .column.column-tint-interviewing   { background: color-mix(in srgb, var(--purple) 12%, transparent); }
+[data-theme="dark"] .column.column-tint-interviewed    { background: color-mix(in srgb, var(--purple) 12%, transparent); }
+[data-theme="dark"] .column.column-tint-offer          { background: color-mix(in srgb, var(--teal) 12%, transparent); }
+[data-theme="dark"] .column.column-tint-accepted       { background: color-mix(in srgb, var(--success) 13%, transparent); }
+[data-theme="dark"] .column.column-tint-rejected       { background: color-mix(in srgb, var(--danger) 10%, transparent); }
+[data-theme="dark"] .column.column-tint-recent    { background: color-mix(in srgb, var(--success) 12%, transparent); }
+[data-theme="dark"] .column.column-tint-followup  { background: color-mix(in srgb, var(--warning) 12%, transparent); }
+[data-theme="dark"] .column.column-tint-ghosted   { background: color-mix(in srgb, var(--danger) 10%, transparent); }
+
+/* SUBSTATUS SECTION TINTS — inside the Applied column, each substatus
+   gets its own coloured wash so Accepted/Offer/Interviewed/Interviewing/
+   Applied are visually distinct. Uses the same colour family as the pill
+   for that status. Padding + negative margin again to make the section
+   feel like a contained lane within the column. Slightly stronger than
+   the column wash since they\'re nested — needs more tint to show through. */
+.substatus-section {
+  padding: 6px 8px 10px;
+  margin: 0 -8px;
+  border-radius: var(--r-sm);
+  position: relative;
+}
+.substatus-section + .substatus-section { margin-top: 4px; }
+.substatus-section-sourced        { background: color-mix(in srgb, #94A3B8 4%, transparent); }
+.substatus-section-analysed       { background: color-mix(in srgb, #94A3B8 4%, transparent); }
+.substatus-section-ready-to-apply { background: color-mix(in srgb, var(--success) 5%, transparent); }
+.substatus-section-accepted     { background: color-mix(in srgb, var(--success) 5%, transparent); }
+.substatus-section-offer        { background: color-mix(in srgb, var(--teal) 5%, transparent); }
+.substatus-section-interviewed  { background: color-mix(in srgb, var(--purple) 5%, transparent); }
+.substatus-section-interviewing { background: color-mix(in srgb, var(--purple) 5%, transparent); }
+.substatus-section-applied      { background: color-mix(in srgb, var(--accent) 4%, transparent); }
+.substatus-section-rejected     { background: color-mix(in srgb, var(--danger) 4%, transparent); }
+
+/* Applied age-bucket tints — used when viewing Applied column All tab,
+   where cards are grouped by days-since-application rather than status.
+   Colour maps to urgency: green=recent, amber=follow-up, red=ghosted. */
+.applied-bucket-recent    { background: color-mix(in srgb, var(--success) 5%, transparent); }
+.applied-bucket-follow-up { background: color-mix(in srgb, var(--warning) 5%, transparent); }
+.applied-bucket-ghosted   { background: color-mix(in srgb, var(--danger) 5%, transparent); }
+
+[data-theme="dark"] .substatus-section-sourced        { background: color-mix(in srgb, #94A3B8 7%, transparent); }
+[data-theme="dark"] .substatus-section-analysed       { background: color-mix(in srgb, #94A3B8 7%, transparent); }
+[data-theme="dark"] .substatus-section-ready-to-apply { background: color-mix(in srgb, var(--success) 8%, transparent); }
+[data-theme="dark"] .substatus-section-accepted     { background: color-mix(in srgb, var(--success) 8%, transparent); }
+[data-theme="dark"] .substatus-section-offer        { background: color-mix(in srgb, var(--teal) 8%, transparent); }
+[data-theme="dark"] .substatus-section-interviewed  { background: color-mix(in srgb, var(--purple) 8%, transparent); }
+[data-theme="dark"] .substatus-section-interviewing { background: color-mix(in srgb, var(--purple) 8%, transparent); }
+[data-theme="dark"] .substatus-section-applied      { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+[data-theme="dark"] .substatus-section-rejected     { background: color-mix(in srgb, var(--danger) 6%, transparent); }
+[data-theme="dark"] .applied-bucket-recent    { background: color-mix(in srgb, var(--success) 8%, transparent); }
+[data-theme="dark"] .applied-bucket-follow-up { background: color-mix(in srgb, var(--warning) 8%, transparent); }
+[data-theme="dark"] .applied-bucket-ghosted   { background: color-mix(in srgb, var(--danger) 8%, transparent); }
+
+/* Substatus divider sits inside the section; reset its top margin so it
+   pins to the section top without doubled spacing. */
+.substatus-section .substatus-divider:first-child { margin-top: 0; }
+
+.holding-divider { display: flex; align-items: center; gap: 10px; margin: 10px 2px 4px; cursor: pointer; user-select: none; }
+.holding-divider-line { flex: 1; height: 1px; background: var(--border); }
+.holding-divider-label { font-size: 10px; color: var(--text-ter); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; transition: color var(--duration-fast) var(--ease); }
+.holding-divider:hover .holding-divider-label { color: var(--text-sec); }
+
+/* FOLLOW-UP CARDS — Applied jobs with application-date > 7 days ago.
+   Keep the subtle amber background tint so cards that need attention
+   glow differently even before the ribbon catches your eye. */
+.card.follow-up {
+  background: var(--warning-soft);
+  border-color: rgba(186, 117, 23, 0.25);
+}
+.card.follow-up:hover { border-color: var(--warning); }
+
+/* SUBSTATUS DIVIDERS — shown inside the Applied column to group cards by
+   their current substatus (Accepted at top, Applied at bottom). The label
+   reuses the existing .pill-status styling so each divider visually matches
+   the cards it labels. Only rendered for sections with ≥1 card. */
+.substatus-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 2px 6px;
+  user-select: none;
+}
+.substatus-divider:first-child {
+  margin-top: 0;
+}
+.substatus-divider-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.substatus-divider-label {
+  padding: 4px 10px;
+  font-size: 11px;
+  box-shadow: 0 1px 2px rgba(28,28,28,0.04);
+}
+
+/* COLUMN TABS — horizontal tab row below the column header. Default tab
+   "All" shows status sections; specific tabs show only that status with
+   date dividers. Tabs stay compact — they live inside each column so
+   space is tight. Number badge next to each tab shows how many cards
+   match (hidden when 0). */
+.column-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  margin-bottom: 10px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  flex-wrap: nowrap;
+  /* STICKY: pins below the sticky column header. Column header is ~40px
+     tall including its padding; that offset plus the global sticky offset
+     keeps the tabs visible while scrolling through long card lists.
+     z-index above card ribbons (which use z-index 2) but below column-
+     header (10) so the column title still wins if they visually touch. */
+  position: sticky;
+  top: calc(var(--sticky-offset, 180px) + 40px);
+  z-index: 9;
+}
+.column-tab {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: none;
+  padding: 5px 9px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-ter);
+  letter-spacing: -0.005em;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease);
+  white-space: nowrap;
+  min-height: 26px;
+}
+.column-tab:hover { color: var(--text-sec); background: var(--bg-elevated); }
+.column-tab.active {
+  background: var(--bg-elevated);
+  color: var(--accent-text);
+  box-shadow: 0 1px 2px rgba(28,28,28,0.06);
+}
+.column-tab-count {
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  padding: 1px 5px;
+  border-radius: var(--r-full);
+  background: var(--bg-inset);
+  color: var(--text-ter);
+  min-width: 16px;
+  text-align: center;
+  line-height: 1.4;
+}
+.column-tab.active .column-tab-count {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+/* DATE DIVIDERS — Today / Last 7 days / Older. Thinner and less visually
+   loud than status dividers, since they\'re a secondary grouping. Only
+   render for columns with more than ~5 cards. */
+.date-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 2px 4px;
+  user-select: none;
+}
+.date-divider:first-child { margin-top: 0; }
+.date-divider-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+  opacity: 0.7;
+}
+.date-divider-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-ter);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Empty-state message inside a column — when no cards match the current
+   tab/filter. Replaces the old inline style block. */
+.column-empty {
+  padding: 32px 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-ter);
+  border: 1px dashed var(--border);
+  border-radius: var(--r-md);
+}
+
+/* NOTIFICATION ZONE — sits between the header and the columns. Houses the
+   batch toolbar when active and the Ready to Apply bar when there are
+   cards at that stage. Stacks vertically if both are present.
+   
+   STICKY: pins directly under the sticky header so the batch toolbar and
+   Ready to Apply banner stay visible while scrolling through long lists.
+   --sticky-offset is set by JS to match the header\'s current height.
+   z-index sits above column headers (10) but below modal overlay (100+)
+   and below the main header (50) — actually equal to 50 and adjacent, so
+   the drop-shadow stacking stays clean. */
+.notification-zone {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+  position: sticky;
+  top: var(--sticky-offset, 180px);
+  z-index: 20;
+  background: var(--bg);
+  /* Soft fade at the bottom so cards scrolling behind don\'t collide
+     hard-edged into the bar. Only applied when the zone has content. */
+  padding-bottom: 4px;
+}
+/* Same viewport-wide background trick as .header — prevents coloured
+   column washes peeking through on either side when scrolled. */
+.notification-zone:not(:empty)::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -50vw;
+  right: -50vw;
+  background: var(--bg);
+  z-index: -1;
+}
+.notification-zone:empty { display: none; }
+[data-theme="dark"] .notification-zone:not(:empty)::before { background: var(--bg); }
+
+/* READY TO APPLY BAR — teal banner that appears between header and columns
+   when any cards are in Ready to Apply. Click a card to open its detail.
+   Replaces the old Ready to Apply column since Louie only ever has 1-2
+   cards at this stage and always submits them fast — better as an inbox
+   signal than a parking lot. */
+.ready-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  background: color-mix(in srgb, var(--teal) 10%, var(--bg-elevated));
+  border: 1px solid color-mix(in srgb, var(--teal) 30%, transparent);
+  border-radius: var(--r-md);
+  box-shadow: 0 1px 2px rgba(28,28,28,0.04);
+  flex-wrap: wrap;
+}
+.ready-bar-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.ready-bar-icon {
+  font-size: 16px;
+  color: var(--teal);
+  line-height: 1;
+}
+.ready-bar-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--teal-text);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ready-bar-count {
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 8px;
+  background: var(--teal);
+  color: white;
+  border-radius: var(--r-full);
+  min-width: 22px;
+  text-align: center;
+}
+.ready-bar-cards {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.ready-card {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 6px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: all var(--duration-fast) var(--ease);
+  min-width: 0;
+  max-width: 280px;
+}
+.ready-card:hover {
+  border-color: var(--teal);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+.ready-card-role {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+}
+.ready-card-company {
+  font-size: 11px;
+  color: var(--text-sec);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+}
+.ready-card-age {
+  font-size: 10px;
+  color: var(--text-ter);
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  margin-top: 2px;
+}
+.ready-more {
+  font-size: 11px;
+  color: var(--teal-text);
+  font-weight: 600;
+  padding: 4px 10px;
+  background: var(--bg-elevated);
+  border-radius: var(--r-full);
+  border: 1px dashed color-mix(in srgb, var(--teal) 30%, transparent);
+}
+
+/* MOBILE BOTTOM TAB BAR — fixed-position iOS-style column navigator.
+   Only rendered on mobile via isMobile() check in JS; CSS also hides on
+   desktop as a belt-and-braces. Safe-area inset respects the iPhone home
+   indicator. Blur backdrop keeps it legible over scrolling content. */
+.mobile-tabbar {
+  display: none;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  backdrop-filter: saturate(180%) blur(14px);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
+  border-top: 1px solid var(--border);
+  padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+  justify-content: space-around;
+  gap: 4px;
+}
+@media (max-width: 820px) {
+  .mobile-tabbar { display: flex; }
+}
+.mobile-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px 6px;
+  background: transparent;
+  border: none;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  color: var(--text-sec);
+  font-family: inherit;
+  position: relative;
+  transition: color var(--duration-fast) var(--ease), background var(--duration-fast) var(--ease);
+}
+.mobile-tab:active { background: var(--bg-elevated); }
+.mobile-tab.active {
+  color: var(--accent);
+}
+.mobile-tab-icon {
+  font-size: 18px;
+  line-height: 1;
+  display: inline-block;
+}
+.mobile-tab-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.mobile-tab-count {
+  position: absolute;
+  top: 4px;
+  right: calc(50% - 22px);
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: var(--r-full);
+  min-width: 16px;
+  text-align: center;
+}
+.mobile-tab.active .mobile-tab-count {
+  background: var(--accent);
+}
+
+/* CARD DETAILS LINE — compact factual line between company and meta,
+   showing location · salary · work arrangement. Replaces the status pill
+   that used to live here (status is now visible via column dividers). */
+.card-details {
+  font-size: 11.5px;
+  color: var(--text-ter);
+  margin: 0 0 8px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card-details-sep {
+  color: var(--border-hover);
+  margin: 0 3px;
+}
+
+/* CARD JOURNEY — for Applied+ cards, show a stacked pill list of previous
+   statuses below the card's current status pill. Compact, low-emphasis so
+   the current status remains the primary signal. */
+.card-journey {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 6px;
+}
+.card-journey .pill-status {
+  font-size: 10px;
+  padding: 2px 6px;
+  opacity: 0.7;
+}
+.card-journey .pill-status .icon {
+  font-size: 10px;
+}
+
+/* ============================================================
+   PIPELINE CARD
+   ============================================================ */
+
+.card { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 14px; cursor: pointer; transition: all var(--duration-fast) var(--ease); position: relative; }
+.card:hover { border-color: var(--border-hover); box-shadow: var(--shadow-sm); transform: translateY(-1px); }
+.card.selected { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-sm); }
+.card.holding { opacity: 0.55; }
+.card.holding:hover { opacity: 0.85; }
+
+.card-role { font-size: 13.5px; font-weight: 600; margin: 0 0 3px; line-height: 1.35; letter-spacing: -0.01em; color: var(--text); }
+.card-company { font-size: 12.5px; color: var(--text-sec); margin: 0 0 11px; font-weight: 500; }
+
+/* STALENESS STRIPE — a 3px coloured bar down the card\'s LEFT edge that
+   reads as a passive temperature gauge. Green = fresh, amber = warming,
+   red = cold, neutral = fresh-but-not-brand-new. Rendered via ::before
+   so it stays locked to the card\'s visual edge without disturbing the
+   content flow. Border-radius matches the card\'s left corners. */
+.card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-top-left-radius: var(--r-md);
+  border-bottom-left-radius: var(--r-md);
+  background: transparent;
+  transition: background var(--duration-fast) var(--ease);
+  pointer-events: none;
+}
+.card.card-stale-fresh::before,
+.card.card-stale-mild::before,
+.card.card-stale-warming::before,
+.card.card-stale-cold::before,
+.card.card-stale-none::before { background: transparent; }
+
+/* When a card is selected or batch-selected, the accent border takes
+   priority so hide the stripe to avoid visual clash. */
+.card.selected::before,
+.card.batch-selected::before { background: transparent; }
+
+/* FRESH-TODAY INDICATOR — tiny coloured square in the bottom-left corner
+   with a checkmark, shown ONLY when lastActivity === today. Silent
+   confirmation that the card had activity today; older cards render
+   nothing here so it stays quiet unless there\'s something to celebrate. */
+/* CARD RIBBON — folded-corner ribbon in the top-right of the card for
+   noteworthy signals. Priority-based: follow-up (amber) wins over
+   touched-today (green). Most cards have none. Rendered as a flat
+   rounded pill with a small folded triangle beneath to create the
+   "ribbon hanging off the corner" effect. */
+.card-ribbon {
+  position: absolute;
+  top: 10px;
+  right: -4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px 3px 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.3;
+  border-radius: 3px 0 0 3px;
+  box-shadow: 0 1px 2px rgba(28,28,28,0.1);
+  pointer-events: none;
+  z-index: 2;
+  color: white;
+}
+/* Folded-corner triangle sitting below the ribbon — creates the classic
+   "banner wrapped around the card corner" look. */
+.card-ribbon::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -4px;
+  border-left: 4px solid transparent;
+  border-top: 4px solid;
+  border-top-color: inherit;
+}
+.card-ribbon-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  line-height: 1;
+}
+.card-ribbon-icon svg { width: 10px; height: 10px; display: block; }
+/* Stale ribbon icon: slow gentle wobble to draw the eye without being
+   annoying. Period of 2.4s + 60% idle time means it pulses briefly then
+   sits still — eye-catching once, ignorable after. */
+.card-ribbon-stale .card-ribbon-icon {
+  animation: ribbon-icon-wobble 2.4s ease-in-out infinite;
+}
+@keyframes ribbon-icon-wobble {
+  0%, 60%, 100% { transform: rotate(0deg); }
+  70%           { transform: rotate(-12deg); }
+  80%           { transform: rotate(8deg); }
+  90%           { transform: rotate(-4deg); }
+}
+/* Follow-up ribbon icon: gentle pulse so the bell catches attention.
+   Same idle-then-pulse rhythm so the page doesn\'t feel busy. */
+.card-ribbon-followup .card-ribbon-icon {
+  animation: ribbon-icon-pulse 2.4s ease-in-out infinite;
+}
+@keyframes ribbon-icon-pulse {
+  0%, 60%, 100% { transform: scale(1); }
+  70%           { transform: scale(1.18); }
+  85%           { transform: scale(0.95); }
+}
+.card-ribbon-text {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  font-size: 9.5px;
+}
+
+/* Follow-up ribbon: amber. The border-top on the folded corner inherits
+   a darker amber so the "shadow" side of the fold reads correctly. */
+.card-ribbon-followup {
+  background: var(--warning);
+  border-top-color: color-mix(in srgb, var(--warning) 60%, black);
+}
+.card-ribbon-followup::after {
+  border-top-color: color-mix(in srgb, var(--warning) 60%, black);
+}
+/* Touched-today ribbon: green. Same folded-corner trick. */
+.card-ribbon-touched {
+  background: var(--success);
+  border-top-color: color-mix(in srgb, var(--success) 60%, black);
+}
+.card-ribbon-touched::after {
+  border-top-color: color-mix(in srgb, var(--success) 60%, black);
+}
+/* Stale ribbon: muted slate-amber. Distinct from follow-up (which is
+   strictly for Applied cards) — stale fires on pre-applied stages that
+   have sat too long. */
+.card-ribbon-stale {
+  background: #94A3B8;
+  border-top-color: #64748B;
+}
+.card-ribbon-stale::after {
+  border-top-color: #64748B;
+}
+/* When a card has a ribbon, give the role/company lines some right padding
+   so text doesn\'t run under the ribbon on narrow columns. */
+.card:has(.card-ribbon) .card-role,
+.card:has(.card-ribbon) .card-company {
+  padding-right: 68px;
+}
+
+.pill { font-size: 11px; padding: 3px 8px; border-radius: var(--r-sm); font-weight: 600; display: inline-block; letter-spacing: -0.005em; line-height: 1.4; }
+.pill-score { background: transparent; color: var(--text); padding: 3px 0; font-weight: 700; font-size: 12.5px; }
+.pill-green  { background: var(--success-soft); color: var(--success-text); }
+.pill-amber  { background: var(--warning-soft); color: var(--warning-text); }
+.pill-blue   { background: var(--accent-soft); color: var(--accent-text); }
+.pill-purple { background: var(--purple-soft); color: var(--purple-text); }
+.pill-grey   { background: var(--bg-secondary); color: var(--text-sec); }
+.pill-red    { background: var(--danger-soft); color: var(--danger-text); }
+.pill-teal   { background: var(--teal-soft); color: var(--teal-text); }
+
+.small-meta { font-size: 11.5px; color: var(--text-ter); font-weight: 500; letter-spacing: -0.005em; }
+
+.stale-fresh   { color: var(--success-text); }
+.stale-warming { color: var(--warning-text); }
+.stale-cold    { color: var(--danger-text); }
+.stale-neutral { color: var(--text-ter); }
+
+.detail-dates { margin-top: 8px; font-size: 11.5px; color: var(--text-ter); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; letter-spacing: -0.005em; }
+
+/* STATUS TIMELINE — horizontal journey strip shown above tabs in the
+   detail modal. Compact pills with the status transition history,
+   separated by arrows. Horizontal scroll on narrow widths so the full
+   journey stays visible even on mobile. */
+.status-timeline {
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 12px 14px 14px;
+  margin-bottom: 18px;
+}
+.timeline-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-ter);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0 0 10px;
+}
+.timeline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.timeline-header .timeline-label {
+  margin: 0;
+}
+.timeline-edit-btn {
+  font-size: 11px;
+  padding: 3px 8px;
+  color: var(--text-sec);
+}
+.timeline-edit-btn:hover {
+  color: var(--text);
+  background: var(--bg-elevated);
+  border-color: var(--border-strong);
+}
+
+/* EDIT JOURNEY MODAL — row-per-entry layout with status select,
+   datetime-local input, and remove button. */
+.journey-edit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.journey-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.journey-edit-row:hover {
+  border-color: var(--border-hover);
+}
+.journey-edit-index {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-ter);
+  min-width: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.journey-edit-row select {
+  flex: 1;
+  min-width: 140px;
+}
+.journey-edit-row input[type="datetime-local"] {
+  width: auto;
+  flex-shrink: 0;
+  font-size: 13px;
+  padding: 7px 10px;
+}
+.journey-edit-row .danger {
+  color: var(--danger-text);
+  padding: 6px 10px;
+}
+.journey-edit-row .danger:hover {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+}
+@media (max-width: 680px) {
+  .journey-edit-row {
+    flex-wrap: wrap;
+  }
+  .journey-edit-row input[type="datetime-local"] {
+    flex: 1;
+    min-width: 160px;
+  }
+}
+
+/* BATCH UPDATE JOURNEY MODAL — preview chips for selected cards, plus a
+   list of {status, date} template rows. Smart-merges the template into
+   each selected card\'s journey (existing entries get backdated, missing
+   ones get added). Keeps the user confident about scope by showing card
+   names up-front. */
+.batch-card-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 10px 12px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  margin-bottom: 14px;
+  max-height: 96px;
+  overflow-y: auto;
+}
+.batch-card-chip {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-sec);
+  background: var(--bg-elevated);
+  padding: 3px 8px;
+  border-radius: var(--r-full);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+.batch-card-chip-more {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-weight: 600;
+  border-color: color-mix(in srgb, var(--accent) 24%, transparent);
+}
+.batch-journey-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.batch-journey-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.batch-journey-row:hover {
+  border-color: var(--border-hover);
+}
+.batch-journey-row select {
+  flex: 1;
+  min-width: 130px;
+}
+.batch-journey-row input[type="datetime-local"] {
+  width: auto;
+  flex-shrink: 0;
+  font-size: 13px;
+  padding: 7px 10px;
+}
+.batch-journey-row button.icon-only {
+  padding: 6px 10px;
+  color: var(--danger-text);
+  flex-shrink: 0;
+}
+.batch-journey-row button.icon-only:hover {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+}
+.batch-journey-placeholder {
+  width: 30px;       /* matches remove button width so rows align when only one row */
+  flex-shrink: 0;
+}
+.batch-journey-help {
+  margin-top: 16px;
+  padding: 12px 14px;
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
+  border-radius: var(--r-md);
+  font-size: 12px;
+  color: var(--text-sec);
+  line-height: 1.55;
+}
+.batch-journey-help strong {
+  color: var(--accent-text);
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12.5px;
+}
+.batch-journey-help ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.batch-journey-help li {
+  margin-bottom: 3px;
+}
+@media (max-width: 680px) {
+  .batch-journey-row {
+    flex-wrap: wrap;
+  }
+  .batch-journey-row input[type="datetime-local"] {
+    flex: 1;
+    min-width: 160px;
+  }
+}
+
+.timeline-track {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 2px;
+}
+.timeline-step {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  flex-shrink: 0;
+  opacity: 0.65;
+  transition: opacity var(--duration-fast) var(--ease);
+}
+.timeline-step.current { opacity: 1; }
+.timeline-step.current .pill-status {
+  box-shadow: 0 0 0 2px var(--bg-elevated), 0 0 0 4px var(--accent-soft);
+}
+.timeline-when {
+  font-size: 10.5px;
+  color: var(--text-ter);
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  padding-left: 2px;
+}
+.timeline-step.current .timeline-when {
+  color: var(--accent-text);
+  font-weight: 600;
+}
+.timeline-arrow {
+  font-size: 13px;
+  color: var(--text-ter);
+  flex-shrink: 0;
+  padding-bottom: 16px;  /* align arrow with the pill row, above the date line */
+  user-select: none;
+}
+
+/* BATCH TOOLBAR */
+.batch-toolbar { position: sticky; top: 0; z-index: 20; background: var(--accent-soft); border-bottom: 1px solid var(--accent); box-shadow: 0 2px 8px rgba(0,0,0,0.06); padding: 10px 24px; animation: batch-toolbar-in 0.16s ease-out; }
+.batch-toolbar-inner { display: flex; align-items: center; gap: 20px; max-width: 1400px; margin: 0 auto; }
+.batch-toolbar-label { font-size: 13.5px; color: var(--accent-text); letter-spacing: -0.005em; }
+.batch-toolbar-label strong { font-weight: 700; }
+.batch-toolbar-actions { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+.batch-toolbar-actions button { font-size: 12.5px; }
+.batch-toolbar-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
+@keyframes batch-toolbar-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* BATCH SELECTED — tinted background flood on the whole card, no dot.
+   The existing .card::before is the left-edge staleness stripe, so we
+   override it here to NOT render a dot but ALSO to not override the
+   stripe (which has its own rule at .card.batch-selected::before {
+   background: transparent; } to hide it when selected). We let the
+   staleness stripe stay transparent for selected cards and flood the
+   card background with an accent tint instead. */
+.card.batch-selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-elevated));
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+[data-theme="dark"] .card.batch-selected {
+  background: color-mix(in srgb, var(--accent) 22%, var(--bg-elevated));
+}
+.card { position: relative; }
+
+.card.batch-mode { cursor: pointer; }
+.card.batch-ineligible { opacity: 0.4; cursor: not-allowed; pointer-events: auto; }
+.card.batch-ineligible:hover { opacity: 0.45; }
+
+/* BATCH MENU DROPDOWN — FIX 23-Apr
+   Previous version referenced undefined --bg-primary token, making the
+   dropdown transparent. Explicit solid background + strong shadow so it
+   pops cleanly off whatever's behind it. */
+.batch-menu { position: relative; }
+.batch-menu-trigger { font-size: 12.5px; }
+.batch-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 180px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+  display: none;
+  z-index: 30;
+}
+.batch-menu-dropdown.open { display: block; }
+.batch-menu-dropdown button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+.batch-menu-dropdown button:hover { background: var(--bg-secondary); color: var(--accent-text); }
+
+.batch-toolbar-hint { margin-left: 10px; font-size: 12px; color: var(--accent-text); opacity: 0.8; font-weight: 400; }
+.batch-toolbar-count { font-size: 12.5px; color: var(--accent-text); font-weight: 600; margin-left: 16px; }
+
+.ad-content-body { padding: 20px 28px 28px; max-height: 65vh; overflow-y: auto; font-size: 14px; line-height: 1.55; color: var(--text); }
+.ad-content-body h2 { font-size: 18px; font-weight: 700; margin: 20px 0 10px; color: var(--text); }
+.ad-content-body h3 { font-size: 15.5px; font-weight: 700; margin: 18px 0 8px; color: var(--text); }
+.ad-content-body h4 { font-size: 14px; font-weight: 600; margin: 14px 0 6px; color: var(--text-sec); }
+.ad-content-body h2:first-child, .ad-content-body h3:first-child, .ad-content-body h4:first-child { margin-top: 0; }
+.ad-content-body p { margin: 0 0 10px; }
+.ad-content-body ul { margin: 0 0 14px; padding-left: 22px; }
+.ad-content-body li { margin-bottom: 5px; }
+.ad-content-body strong { font-weight: 600; color: var(--text); }
+
+/* Ad content editor textarea — used when modal is in edit mode. Full
+   width, tall enough to paste a typical ad, monospace-ish for copy/paste
+   feel but with a readable line-height. */
+.ad-content-editor {
+  width: 100%;
+  min-height: 360px;
+  max-height: 58vh;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-inset);
+  color: var(--text);
+  font-family: ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  box-sizing: border-box;
+  transition: border-color var(--duration-fast) var(--ease);
+}
+.ad-content-editor:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* Needs-attention button — shown when ad content is missing. Amber tint
+   + warning emoji makes it visually distinct from regular action buttons
+   so users notice it at a glance. */
+button.needs-attention {
+  background: var(--warning-soft);
+  border-color: color-mix(in srgb, var(--warning) 40%, transparent);
+  color: var(--warning-text);
+  font-weight: 600;
+}
+button.needs-attention:hover {
+  background: color-mix(in srgb, var(--warning) 18%, var(--bg-elevated));
+  border-color: var(--warning);
+}
+
+/* FIT CIRCLES */
+.fit-circle { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; font-family: 'JetBrains Mono', ui-monospace, monospace; font-weight: 800; font-size: 13px; border: 2px solid; flex-shrink: 0; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.fit-circle.h { color: var(--success-text); background: var(--success-soft); border-color: var(--success); }
+.fit-circle.m { color: var(--warning-text); background: var(--warning-soft); border-color: var(--warning); }
+.fit-circle.lo{ color: var(--danger-text);  background: var(--danger-soft);  border-color: var(--danger);  }
+.fit-circle.lg { width: 56px; height: 56px; font-size: 18px; border-width: 2.5px; }
+
+.card-body { flex: 1; min-width: 0; }
+.card-row { display: flex; align-items: flex-start; gap: 12px; }
+
+/* STATUS PILLS */
+.pill-status { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; padding: 3px 8px; border-radius: var(--r-sm); font-weight: 600; letter-spacing: -0.005em; line-height: 1.4; }
+.pill-status .icon { font-size: 11px; line-height: 1; font-family: 'JetBrains Mono', ui-monospace, monospace; font-weight: 700; }
+.pill-status.s-sourced      { background: var(--bg-inset);       color: var(--text-ter); }
+.pill-status.s-analysed     { background: var(--bg-secondary);   color: var(--text-sec); }
+.pill-status.s-generate     { background: var(--warning-soft);   color: var(--warning-text); }
+.pill-status.s-ready        { background: var(--success-soft);   color: var(--success-text); }
+.pill-status.s-applied      { background: var(--accent-soft);    color: var(--accent-text); }
+.pill-status.s-appliedprep  { background: var(--teal-soft);      color: var(--teal-text); }
+.pill-status.s-interviewing { background: var(--purple-soft);    color: var(--purple-text); }
+.pill-status.s-interviewed  { background: var(--purple-soft);    color: var(--purple-text); }
+.pill-status.s-offer        { background: var(--success-soft);   color: var(--success-text); }
+.pill-status.s-accepted     { background: var(--success-soft);   color: var(--success-text); }
+.pill-status.s-rejected     { background: var(--danger-soft);    color: var(--danger-text); }
+.pill-status.s-rethink      { background: var(--warning-soft);   color: var(--warning-text); }
+.pill-status.s-unsure       { background: var(--warning-soft);   color: var(--warning-text); }
+.pill-status.s-hold         { background: var(--warning-soft);   color: var(--warning-text); }
+.pill-status.s-withdrawn    { background: var(--bg-secondary);   color: var(--text-ter); }
+
+/* CHIPS */
+.chip-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.chip { padding: 4px 10px; border-radius: var(--r-sm); font-size: 12px; line-height: 1.5; border: 1px solid; font-weight: 500; }
+.chip.g { background: var(--success-soft); color: var(--success-text); border-color: rgba(99, 153, 34, 0.25); }
+.chip.r { background: var(--danger-soft);  color: var(--danger-text);  border-color: rgba(163, 45, 45, 0.25); }
+[data-theme="dark"] .chip.g { border-color: rgba(74, 222, 128, 0.25); }
+[data-theme="dark"] .chip.r { border-color: rgba(248, 113, 113, 0.25); }
+
+/* SEARCH */
+input.search-input { background-color: var(--bg-elevated); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238E8E8B' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' width='14' height='14'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: 10px center; border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 7px 12px 7px 30px; font-size: 13px; font-family: inherit; color: var(--text); width: 200px; height: 34px; outline: none; transition: all var(--duration-fast) var(--ease); flex-shrink: 0; }
+[data-theme="dark"] input.search-input { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23A8A49C' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' width='14' height='14'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E"); }
+input.search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+input.search-input::placeholder { color: var(--text-ter); }
+
+/* ARCHIVE */
+.archive-drawer { background: transparent; border: 1px dashed var(--border-strong); border-radius: var(--r-md); padding: 12px 20px; margin-bottom: 24px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; transition: all var(--duration-fast) var(--ease); }
+.archive-drawer:hover { background: var(--bg-secondary); border-color: var(--border-hover); border-style: solid; }
+.archive-drawer-left { display: flex; align-items: center; gap: 12px; }
+.archive-drawer-label { font-size: 13px; font-weight: 600; color: var(--text-sec); }
+.archive-drawer-count { font-size: 11px; font-weight: 600; background: var(--bg-secondary); padding: 2px 9px; border-radius: var(--r-full); color: var(--text-sec); border: 1px solid var(--border); }
+.archive-drawer-sub { font-size: 12px; color: var(--text-ter); }
+.archive-expanded {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 8px 0 24px;
+  align-items: start;
+}
+.archive-expanded > * { min-width: 0; }
+@media (max-width: 1100px) {
+  .archive-expanded { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* DETAIL PANEL */
+.detail-panel { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 28px 32px; margin-bottom: 28px; box-shadow: var(--shadow-sm); position: relative; overflow: hidden; }
+.detail-panel::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--text-ter); }
+.detail-panel.stage-1::before { background: linear-gradient(to right, #94A3B8, #94A3B8 60%, transparent); }
+.detail-panel.stage-2::before { background: linear-gradient(to right, var(--teal), var(--teal) 60%, transparent); }
+.detail-panel.stage-3::before { background: linear-gradient(to right, var(--accent), var(--accent) 60%, transparent); }
+
+.detail-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 22px; gap: 20px; }
+.detail-header-pills { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+.detail-role { font-size: 22px; font-weight: 700; margin: 0 0 4px; letter-spacing: -0.025em; color: var(--text); line-height: 1.2; }
+.detail-meta { font-size: 13.5px; color: var(--text-sec); margin: 0; font-weight: 500; }
+.detail-fit { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.detail-fit-score { font-size: 32px; font-weight: 700; color: var(--success-text); letter-spacing: -0.04em; line-height: 1; font-variant-numeric: tabular-nums; }
+.detail-fit-label { font-size: 10px; color: var(--text-ter); margin: 0; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+
+.tile-row { display: grid; gap: 12px; margin-bottom: 18px; }
+.tile-row.three { grid-template-columns: repeat(3, 1fr); }
+.tile-row.two   { grid-template-columns: repeat(2, 1fr); }
+.tile { background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 14px; }
+.tile-label { font-size: 10.5px; color: var(--text-ter); margin: 0 0 5px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+.tile-value { font-size: 13px; margin: 0; line-height: 1.55; color: var(--text); font-weight: 500; }
+.tile.clickable { cursor: pointer; transition: transform var(--duration-fast) var(--ease), box-shadow var(--duration-fast) var(--ease); position: relative; }
+.tile.clickable:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+.tile.clickable:active { transform: translateY(0); }
+.tile-hint { position: absolute; top: 10px; right: 12px; font-size: 11px; color: var(--text-ter); opacity: 0.7; }
+.tile.clickable:hover .tile-hint { opacity: 1; }
+
+/* Doc viewer modal — shows markdown content as preformatted text */
+.doc-viewer-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); padding: 0 28px; background: var(--bg-secondary); }
+.doc-viewer-tab { background: transparent; border: none; padding: 12px 16px; font-size: 13px; color: var(--text-sec); cursor: pointer; font-family: inherit; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all var(--duration-fast) var(--ease); }
+.doc-viewer-tab:hover { color: var(--text); }
+.doc-viewer-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.doc-viewer-tab:disabled { color: var(--text-ter); cursor: not-allowed; opacity: 0.5; }
+.doc-viewer-tab:disabled:hover { color: var(--text-ter); }
+.doc-md-pane { padding: 20px 28px; max-height: 65vh; overflow-y: auto; background: var(--bg); }
+.doc-md-content { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; font-size: 14px; line-height: 1.7; color: var(--text); white-space: pre-wrap; word-wrap: break-word; margin: 0; }
+
+/* TABS */
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 22px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.tab { background: transparent; border: none; padding: 10px 14px 12px; color: var(--text-sec); border-bottom: 2px solid transparent; border-radius: 0; font-size: 13px; font-weight: 500; cursor: pointer; margin-bottom: -1px; transition: color var(--duration-fast) var(--ease), border-color var(--duration-fast) var(--ease); letter-spacing: -0.005em; white-space: nowrap; flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px; }
+.tab:hover:not(.locked) { background: transparent; color: var(--text); border-color: transparent; }
+.tab.active { color: var(--text); border-bottom-color: var(--text); font-weight: 600; }
+/* Locked tabs: muted, non-interactive feel, with a small lock glyph.
+   Click handler still fires (to show toast on mobile), but cursor + colour
+   communicate "you can\'t go here yet". */
+.tab.locked {
+  color: var(--text-ter);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.tab.locked:hover {
+  color: var(--text-ter);
+  background: transparent;
+}
+.tab-lock {
+  font-size: 9.5px;
+  opacity: 0.7;
+  display: inline-block;
+  margin-left: 1px;
+}
+
+.section-title { font-size: 10.5px; font-weight: 600; color: var(--text-ter); margin: 0 0 14px; text-transform: uppercase; letter-spacing: 0.08em; }
+
+.intel-row { display: grid; grid-template-columns: 130px 1fr; gap: 12px 20px; font-size: 13.5px; line-height: 1.7; margin-bottom: 22px; }
+.intel-row p { margin: 0; }
+.intel-label { color: var(--text-ter); font-weight: 500; font-size: 12.5px; }
+
+.intel-tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 22px; }
+.intel-tile { background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--r-md); padding: 14px 16px; transition: border-color var(--duration-fast) var(--ease); }
+.intel-tile:hover { border-color: var(--border-hover); }
+.intel-tile-label { font-size: 10.5px; font-weight: 600; color: var(--text-ter); text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 6px; }
+.intel-tile-value { font-size: 13.5px; color: var(--text); line-height: 1.6; margin: 0; font-weight: 500; }
+
+.marketing-panel { background: var(--purple-soft); border: 1px solid transparent; border-radius: var(--r-md); padding: 16px 18px; margin-bottom: 22px; position: relative; }
+.marketing-panel::before { content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 3px; background: var(--purple); border-radius: var(--r-md) 0 0 var(--r-md); }
+.marketing-panel .intel-row { margin-bottom: 0; }
+.marketing-panel .intel-label { color: var(--purple); opacity: 0.85; }
+.marketing-panel .intel-row p:not(.intel-label) { color: var(--purple-text); }
+[data-theme="dark"] .marketing-panel .intel-row p:not(.intel-label) { color: var(--text); }
+.marketing-title { font-size: 10.5px; font-weight: 700; color: var(--purple); margin: 0 0 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+
+.accordion { border: 1px solid var(--border); border-radius: var(--r-md); margin-bottom: 18px; overflow: hidden; transition: border-color var(--duration-fast) var(--ease); background: var(--bg-inset); }
+.accordion:hover { border-color: var(--border-hover); }
+.accordion-head { display: flex; align-items: center; justify-content: space-between; padding: 13px 16px; cursor: pointer; user-select: none; transition: background var(--duration-fast) var(--ease); }
+.accordion-head:hover { background: var(--bg-secondary); }
+.accordion-head-label { font-size: 13px; font-weight: 500; color: var(--text-sec); }
+.accordion-head-count { font-size: 12px; color: var(--text-ter); font-weight: 500; }
+.accordion-body { padding: 14px 16px 16px; border-top: 1px solid var(--border); background: var(--bg-elevated); }
+
+.actions-row { display: flex; align-items: center; justify-content: space-between; padding-top: 22px; border-top: 1px solid var(--border); gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+.actions-left, .actions-right { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+
+/* INTERVIEW PREP */
+.practice-header { background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--r-md); padding: 18px 20px; margin-bottom: 18px; }
+.practice-header-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.practice-bar { display: flex; gap: 3px; height: 6px; background: var(--bg-tertiary); border-radius: var(--r-full); overflow: hidden; }
+.practice-bar-seg { height: 6px; }
+.filter-pills { display: flex; gap: 6px; margin-bottom: 16px; }
+.filter-pill { font-size: 12px; padding: 5px 12px; border-radius: var(--r-md); border: 1px solid var(--border); background: transparent; color: var(--text-sec); cursor: pointer; transition: all var(--duration-fast) var(--ease); font-weight: 500; }
+.filter-pill:hover { border-color: var(--border-hover); color: var(--text); }
+.filter-pill.active { background: var(--text); color: var(--bg-elevated); border-color: var(--text); font-weight: 600; }
+.q-card { border: 1px solid var(--border); border-radius: var(--r-md); margin-bottom: 10px; background: var(--bg-elevated); transition: all var(--duration-fast) var(--ease); }
+.q-card:hover { border-color: var(--border-hover); }
+.q-card.amber { border-color: var(--warning); box-shadow: 0 0 0 3px var(--warning-soft); }
+.q-head { display: flex; align-items: flex-start; justify-content: space-between; padding: 13px 16px; gap: 14px; cursor: pointer; }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-top: 6px; flex-shrink: 0; }
+.q-body { padding: 0 16px 16px; }
+.ans-block { border-radius: var(--r-md); padding: 12px 14px; margin-bottom: 10px; font-size: 13.5px; line-height: 1.65; }
+.ans-label { font-size: 10.5px; font-weight: 700; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.06em; }
+.q-actions { display: flex; gap: 6px; padding-top: 12px; border-top: 1px solid var(--border); margin-top: 8px; flex-wrap: wrap; }
+
+/* NOTES TAB */
+.notes-compose {
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+  margin-bottom: 20px;
+}
+.notes-compose textarea {
+  min-height: 72px;
+  margin-bottom: 10px;
+  resize: vertical;
+}
+.notes-compose-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.notes-compose-hint {
+  font-size: 11.5px;
+  color: var(--text-ter);
+  font-weight: 500;
+}
+.notes-log { display: flex; flex-direction: column; gap: 10px; }
+.note-entry {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--teal);
+  border-radius: var(--r-md);
+  background: var(--bg-elevated);
+  padding: 11px 14px 12px;
+  transition: border-color var(--duration-fast) var(--ease);
+}
+.note-entry:hover { border-color: var(--border-hover); border-left-color: var(--teal); }
+.note-entry.legacy { border-left-color: var(--text-ter); }
+.note-entry-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.note-entry-ts {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--teal-text);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.note-entry.legacy .note-entry-ts { color: var(--text-ter); }
+.note-entry-rel {
+  font-size: 11px;
+  color: var(--text-ter);
+  font-weight: 500;
+}
+.note-entry-text {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text);
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  cursor: text;
+  border-radius: var(--r-sm);
+  padding: 4px 6px;
+  margin: -4px -6px;
+  transition: background var(--duration-fast) var(--ease);
+}
+.note-entry-text:hover {
+  background: var(--bg-inset);
+}
+/* Inline edit textarea that replaces the <p> when a note is clicked */
+.note-entry-edit {
+  width: 100%;
+  min-height: 60px;
+  font-family: inherit;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text);
+  padding: 8px 10px;
+  border: 1px solid var(--teal);
+  border-radius: var(--r-sm);
+  background: var(--bg-elevated);
+  resize: vertical;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal) 20%, transparent);
+  transition: box-shadow var(--duration-fast) var(--ease);
+}
+.note-entry-edit:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal) 30%, transparent);
+}
+/* Delete × button — muted until hovered so it doesn\'t dominate */
+.note-entry-delete {
+  background: transparent;
+  border: none;
+  color: var(--text-ter);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+  line-height: 1;
+  opacity: 0;
+  transition: all var(--duration-fast) var(--ease);
+}
+.note-entry:hover .note-entry-delete { opacity: 1; }
+.note-entry-delete:hover {
+  background: var(--danger-soft);
+  color: var(--danger-text);
+}
+.notes-empty {
+  text-align: center;
+  padding: 24px 12px;
+  color: var(--text-ter);
+  font-size: 13px;
+  border: 1px dashed var(--border);
+  border-radius: var(--r-md);
+}
+
+/* MODALS */
+.modal-overlay { position: fixed; inset: 0; background: rgba(10, 10, 12, 0.55); backdrop-filter: blur(6px) saturate(1.1); -webkit-backdrop-filter: blur(6px) saturate(1.1); z-index: 9999; display: flex; align-items: flex-start; justify-content: center; padding: 56px 20px 56px; overflow-y: auto; animation: overlayIn 180ms var(--ease-out); }
+[data-theme="dark"] .modal-overlay { background: rgba(0, 0, 0, 0.65); }
+@keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
+
+.modal { background: var(--bg-elevated); border-radius: var(--r-lg); width: 100%; max-width: 560px; border: 1px solid var(--border); overflow: hidden; margin: auto; box-shadow: var(--shadow-xl); animation: modalIn 260ms var(--ease-out); position: relative; }
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.985); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.modal.wide { max-width: 760px; }
+
+.modal.detail-modal { max-width: 820px; position: relative; }
+.modal.detail-modal::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--text-ter); z-index: 1; }
+.modal.detail-modal.stage-1::before { background: linear-gradient(to right, #94A3B8, #94A3B8 60%, transparent); }
+.modal.detail-modal.stage-2::before { background: linear-gradient(to right, var(--teal), var(--teal) 60%, transparent); }
+.modal.detail-modal.stage-3::before { background: linear-gradient(to right, var(--accent), var(--accent) 60%, transparent); }
+.modal.detail-modal .modal-header { border-bottom: 1px solid var(--border); padding-bottom: 22px; }
+.modal.detail-modal .modal-body { max-height: 62vh; overflow-y: auto; }
+.modal.detail-modal .modal-footer { flex-wrap: wrap; gap: 10px; }
+
+.detail-modal-header { display: flex; align-items: flex-start; gap: 18px; padding: 28px 28px 22px; }
+.detail-header-info { flex: 1; min-width: 0; }
+.detail-header-fit { flex-shrink: 0; text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; padding-top: 2px; }
+.detail-modal-header .modal-close { flex-shrink: 0; margin-top: -4px; }
+
+.modal-header { padding: 24px 28px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.modal-title { font-size: 18px; font-weight: 700; margin: 0 0 4px; letter-spacing: -0.02em; color: var(--text); }
+.modal-subtitle { font-size: 13px; color: var(--text-sec); margin: 0; line-height: 1.55; font-weight: 450; }
+.modal-close { background: transparent; border: 1px solid transparent; font-size: 18px; color: var(--text-sec); width: 28px; height: 28px; border-radius: var(--r-md); cursor: pointer; line-height: 1; padding: 0; display: inline-flex; align-items: center; justify-content: center; transition: all var(--duration-fast) var(--ease); flex-shrink: 0; }
+.modal-close:hover { color: var(--text); background: var(--bg-secondary); border-color: var(--border); }
+.modal-body { padding: 24px 28px; }
+.modal-footer { padding: 16px 28px; border-top: 1px solid var(--border); background: var(--bg-inset); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+
+.field { margin-bottom: 16px; }
+.field:last-child { margin-bottom: 0; }
+.field-label { font-size: 12px; font-weight: 500; color: var(--text-sec); display: block; margin-bottom: 6px; letter-spacing: -0.005em; }
+
+/* DRIVE HELPER — shown in the Phase 1 paste-back modal to give Louie
+   click-to-copy templates for the folder name + cover/resume filenames.
+   Saves a few seconds of typing per application across what is already
+   a lot of naming admin. Each chip is a full-width button that flashes
+   "✓ Copied" briefly when tapped. */
+.drive-helper {
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+  margin-bottom: 18px;
+}
+.drive-helper-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.drive-helper-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent-text);
+  text-decoration: none;
+  padding: 5px 10px;
+  border-radius: var(--r-sm);
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+  transition: all var(--duration-fast) var(--ease);
+}
+.drive-helper-link:hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  transform: translateY(-1px);
+}
+.drive-helper-hint {
+  font-size: 11px;
+  color: var(--text-ter);
+  letter-spacing: -0.005em;
+  font-style: italic;
+}
+.drive-helper-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.drive-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease);
+  width: 100%;
+  color: var(--text-sec);
+  font-family: inherit;
+}
+.drive-chip:hover {
+  border-color: var(--accent);
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+.drive-chip-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+  line-height: 1;
+}
+.drive-chip-kind {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-ter);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 2px 7px;
+  border-radius: var(--r-sm);
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  min-width: 54px;
+  text-align: center;
+}
+.drive-chip:hover .drive-chip-kind {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.drive-chip-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11.5px;
+  letter-spacing: -0.01em;
+}
+.drive-chip-action {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-ter);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 3px 8px;
+  border-radius: var(--r-full);
+  background: var(--bg-inset);
+  transition: all var(--duration-fast) var(--ease);
+}
+.drive-chip:hover .drive-chip-action {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.drive-chip.drive-chip-copied {
+  border-color: var(--success);
+  background: var(--success-soft);
+}
+.drive-chip.drive-chip-copied .drive-chip-action {
+  background: var(--success);
+  color: white;
+}
+
+.queue-list { margin-bottom: 20px; }
+.queue-list-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.queue-list-label { font-size: 12px; font-weight: 600; color: var(--text-sec); text-transform: uppercase; letter-spacing: 0.05em; }
+.queue-item { display: flex; align-items: flex-start; justify-content: space-between; padding: 11px 14px; border: 1px solid var(--border); border-radius: var(--r-md); margin-bottom: 6px; gap: 10px; background: var(--bg-inset); transition: all var(--duration-fast) var(--ease); }
+.queue-item:hover { border-color: var(--border-hover); background: var(--bg-elevated); }
+.queue-item-main { flex: 1; min-width: 0; }
+.queue-item-top { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.queue-item-preview { font-size: 12.5px; margin: 0; color: var(--text-sec); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+
+.step-block { border: 1px solid var(--border); border-radius: var(--r-md); padding: 18px; margin-bottom: 14px; background: var(--bg-inset); transition: all var(--duration-fast) var(--ease); }
+.step-block.active { border-color: var(--accent); background: var(--accent-soft); }
+.step-label { display: inline-block; font-size: 10.5px; padding: 4px 10px; border-radius: var(--r-full); font-weight: 700; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+
+.gdoc-embed { width: 100%; height: 540px; border: none; background: var(--bg-secondary); display: block; }
+
+.toast { position: fixed; bottom: 28px; left: 50%; transform: translate(-50%, 16px); background: var(--text); color: var(--bg-elevated); padding: 11px 20px; border-radius: var(--r-md); font-size: 13px; font-weight: 500; z-index: 10000; opacity: 0; transition: all 260ms var(--ease-out); box-shadow: var(--shadow-lg); letter-spacing: -0.005em; }
+.toast.visible { opacity: 1; transform: translate(-50%, 0); }
+.toast.success { background: var(--success); color: #FFFFFF; }
+.toast.error   { background: var(--danger); color: #FFFFFF; }
+
+/* Apply prompt — persistent two-button toast that appears after clicking
+   "Apply to job ad". Sits above regular toasts so they don't collide. */
+.apply-prompt {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translate(-50%, 16px);
+  background: var(--text);
+  color: var(--bg-elevated);
+  padding: 14px 18px 14px 20px;
+  border-radius: var(--r-md);
+  font-size: 13.5px;
+  font-weight: 500;
+  z-index: 10001;
+  opacity: 0;
+  transition: all 260ms var(--ease-out);
+  box-shadow: var(--shadow-lg);
+  letter-spacing: -0.005em;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: calc(100vw - 32px);
+}
+.apply-prompt.visible { opacity: 1; transform: translate(-50%, 0); }
+.apply-prompt-text { line-height: 1.4; }
+.apply-prompt-text strong { display: block; font-weight: 600; margin-bottom: 2px; }
+.apply-prompt-text span { font-size: 12px; opacity: 0.75; font-weight: 400; }
+.apply-prompt-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.apply-prompt-btn {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.25);
+  color: var(--bg-elevated);
+  padding: 6px 12px;
+  border-radius: var(--r-sm);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all var(--duration-fast) var(--ease);
+}
+.apply-prompt-btn:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.4); }
+.apply-prompt-btn.primary { background: var(--accent); border-color: var(--accent); color: #FFFFFF; }
+.apply-prompt-btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.apply-prompt-close {
+  background: transparent;
+  border: none;
+  color: var(--bg-elevated);
+  opacity: 0.5;
+  cursor: pointer;
+  padding: 4px 6px;
+  font-size: 16px;
+  line-height: 1;
+  border-radius: var(--r-sm);
+}
+.apply-prompt-close:hover { opacity: 1; background: rgba(255,255,255,0.08); }
+@media (max-width: 600px) {
+  .apply-prompt { flex-direction: column; align-items: stretch; gap: 10px; padding: 14px 16px; }
+  .apply-prompt-actions { justify-content: flex-end; }
+}
+
+.empty-state { text-align: center; padding: 48px 24px; color: var(--text-sec); font-size: 13.5px; }
+.empty-state p { margin-bottom: 16px; }
+.loading { text-align: center; padding: 96px 24px; color: var(--text-sec); font-size: 14px; font-weight: 500; }
+.loading::before { content: ''; display: inline-block; width: 18px; height: 18px; border: 2px solid var(--border-hover); border-top-color: var(--text); border-radius: 50%; animation: spin 700ms linear infinite; margin-right: 10px; vertical-align: -4px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 1024px) {
+  body { padding: 24px 20px 40px; }
+  .header-grid { gap: 16px; }
+  .stats-panel { min-width: 280px; }
+  .stats-value-num { font-size: 18px; }
+}
+@media (max-width: 820px) {
+  body {
+    padding: 20px 16px 32px;
+    /* Reserve space for the fixed bottom tab bar so the last column card
+       isn\'t obscured. 72px = tab bar height + safe-area breathing room. */
+    padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  }
+  .header { margin-top: -20px; padding-top: 16px; }
+  /* Collapse the 3-col grid to a single column at narrow widths. Columns
+     stack brand → stats → icon links → action controls, which reads
+     naturally top-to-bottom. */
+  .header-grid { grid-template-columns: 1fr; gap: 14px; }
+  .header-col-left,
+  .header-col-centre,
+  .header-col-right { justify-self: stretch; }
+  .header-col-right { align-items: stretch; }
+  .header-actions {
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .today-pill { flex: 0 1 auto; }
+  .header-add-btn { flex: 0 1 auto; }
+  .brand { gap: 12px; }
+  .brand-mark { width: 36px; height: 36px; }
+  .header-title { font-size: 22px; }
+  .stats-panel { min-width: 0; width: 100%; }
+  .quick-links-compact { justify-content: flex-start; width: 100%; }
+  .action-controls { justify-content: flex-start; flex-wrap: wrap; }
+  input.search-input { width: 100%; flex: 1; min-width: 160px; }
+  .funnel { grid-template-columns: 1fr; gap: 16px; }
+  .archive-expanded { grid-template-columns: 1fr; }
+  /* Column lane tints — narrower margins at tablet widths */
+  .column.column-potential,
+  .column.column-applied,
+  .column.column-engagement { margin: 0 -6px; padding: 12px 8px; }
+  /* Ready-to-apply bar and batch toolbar stack cleaner at narrow widths */
+  .ready-bar { gap: 10px; padding: 10px 12px; }
+  .ready-bar-cards { width: 100%; }
+  .ready-card { max-width: none; flex: 1; }
+  .detail-panel { padding: 22px 20px; }
+  .tile-row.three, .tile-row.two { grid-template-columns: 1fr; }
+  .intel-tiles { grid-template-columns: 1fr; }
+  .intel-row { grid-template-columns: 1fr; gap: 2px 0; }
+  .intel-row p:not(.intel-label) { margin-bottom: 10px; }
+  .actions-row { flex-direction: column; align-items: stretch; }
+  .actions-left, .actions-right { width: 100%; flex-wrap: wrap; }
+  .modal { max-width: 100%; }
+  .modal.wide, .modal.detail-modal { max-width: 100%; }
+  .modal-overlay { padding: 24px 12px; }
+  .detail-modal-header { padding: 20px 18px 16px; gap: 12px; }
+  .modal-body, .modal-footer { padding-left: 18px; padding-right: 18px; }
+  .modal.detail-modal .modal-body { max-height: none; }
+  .gdoc-embed { height: 380px; }
+}
+
+/* MOBILE-ONLY HEADER COMPONENTS — default hidden on desktop, activated
+   inside the 820px breakpoint below. Declared outside the media query
+   so the cascade is clean and the styles aren\'t fighting desktop rules. */
+.stats-mobile-summary {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease);
+}
+.stats-mobile-summary:active { background: color-mix(in srgb, var(--accent) 8%, var(--bg-elevated)); }
+.stats-mobile-label {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  white-space: nowrap;
+}
+.stats-mobile-values {
+  display: flex;
+  gap: 10px;
+  flex: 1;
+  justify-content: flex-end;
+  color: var(--text-sec);
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.stats-mobile-values b {
+  font-weight: 700;
+  color: var(--text);
+  margin-right: 3px;
+}
+.stats-mobile-caret {
+  color: var(--text-ter);
+  font-size: 10px;
+  margin-left: 2px;
+}
+
+.mobile-action-row {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+.mobile-icon-btn {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 15px;
+  padding: 0;
+  transition: background var(--duration-fast) var(--ease), border-color var(--duration-fast) var(--ease);
+}
+.mobile-icon-btn:active { background: color-mix(in srgb, var(--accent) 10%, var(--bg-elevated)); }
+.mobile-icon-btn[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-elevated));
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.mobile-add-btn {
+  flex: 1;
+  height: 38px;
+  font-size: 13px;
+  white-space: nowrap;
+  padding: 0 12px;
+}
+
+/* MOBILE LAYOUT REFINEMENTS at 820px — the earlier block handles structural
+   stack-to-single-column. This one handles the new compact header pieces. */
+@media (max-width: 820px) {
+  /* Show the collapsed stats summary bar (tap to expand) */
+  .stats-mobile-summary { display: flex; }
+  /* Hide the detailed stats-panel grid by default; show when expanded */
+  .stats-panel { display: none; }
+  .stats-panel.mobile-expanded { display: block; }
+
+  /* Tighten the header spacing overall */
+  .header-col-right { gap: 8px; }
+}
+@media (max-width: 480px) {
+  body { padding: 12px 10px 28px; }
+  .header { margin-top: -12px; padding-top: 10px; margin-bottom: 12px; padding-bottom: 12px; }
+
+  /* Brand: icon only. Text + subtitle hidden to reclaim horizontal space. */
+  .brand-text { display: none; }
+  .brand-mark { width: 30px; height: 30px; }
+  .brand { gap: 0; }
+
+  /* Top-right: only the hamburger remains visible. Today pill and
+     + Add jobs move into the drawer via the mobile-only section. */
+  .header-actions > .today-pill,
+  .header-actions > .header-add-btn { display: none; }
+  .header-menu-mobile-only { display: block; }
+
+  /* Drawer positioning: flush with header right edge, full width of
+     available space (minus body padding). */
+  .header-menu { width: calc(100vw - 24px); right: -4px; }
+  .header-menu-links { grid-template-columns: 1fr 1fr; }
+
+  /* Misc scale-down */
+  .header-burger { width: 36px; height: 34px; }
+  .stats-value-num { font-size: 18px; }
+  .stats-tab { font-size: 10.5px; padding: 8px 6px; }
+  .quick-link { font-size: 11.5px; padding: 5px 9px; }
+  .quick-link svg { width: 11px; height: 11px; }
+  .action-controls button { font-size: 12px; padding: 6px 10px; }
+  .detail-role { font-size: 18px; }
+  .detail-fit-score { font-size: 26px; }
+  .modal-title { font-size: 16px; }
+  .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tab { padding: 10px 12px 12px; font-size: 12.5px; flex-shrink: 0; }
+  .filter-pills { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+  .filter-pill { flex-shrink: 0; }
+  .queue-strip { flex-direction: column; align-items: stretch; gap: 12px; }
+  .queue-strip-actions { justify-content: stretch; }
+  .queue-strip-actions button { flex: 1; }
+  .header-grid { gap: 10px; }
+}
+</style>
+</head>
+<body>
+
+<div id="app" class="wrap loading">
+  <div class="loading-visual">
+    <div class="loading-bar"></div>
+    <div class="loading-bar"></div>
+    <div class="loading-bar"></div>
+  </div>
+  <div class="loading-quip" id="loading-quip">Loading pipeline…</div>
+  <div class="loading-sub" id="loading-sub">Faster than a recruiter reply.</div>
+</div>
+
+<div id="modal-root"></div>
+<div id="popover-root"></div>
+<div id="save-indicator-root"></div>
+<div id="apply-prompt-root"></div>
+<div id="toast-root"></div>
+
+<script>
+/* ============================================================
+   CONFIGURATION
+   ============================================================ */
+
+const APPS_SCRIPT_URL = '<?!= scriptUrl ?>';
+
+// Follow-up threshold: Applied jobs older than this sink below divider
+const FOLLOW_UP_DAYS = 7;
+
+/* ============================================================
+   STATE
+   ============================================================ */
+
+const state = {
+  pipeline: [],
+  queue: [],
+  queueCount: 0,
+  selectedRowId: null,
+  selectedRowIds: {},
+  batchMode: null,
+  selectedTab: null,
+  modalOpen: null,
+  modalData: {},
+  // Modal stack — when a modal opens another modal (e.g. cardDetail → docViewer),
+  // we push the previous {modalOpen, modalData, selectedTab} onto this stack
+  // so close-X pops back to the parent rather than dumping to the pipeline.
+  // Cleared whenever a top-level modal opens directly (without a parent).
+  modalStack: [],
+  expandedQuestions: {},
+  expandedRounds: {},
+  showAngles: {},
+  showPreviousRounds: {},
+  showPreparedAnswer: {},
+  holdingCollapsed: {},
+  archiveExpanded: false,
+  modalOpen: null,
+  modalData: {},
+  filterPrep: 'all',
+  search: '',
+  editJourneyDraft: null,
+  batchJourneyDraft: null,
+  // Outcome popover: { rowId, x, y } when open, null when closed.
+  // Lives outside modal state because it can open from the journey row inside the detail modal too.
+  outcomePopover: null,
+  // Apply prompt: { rowId } when active, null when dismissed.
+  // Triggered when user clicks "Apply to job ad" so they can mark applied
+  // without hunting for the footer button after coming back from the ad.
+  applyPrompt: null,
+  statsTab: 'applied',
+  columnTabs: {},
+  // Mobile-only: which of the three columns is currently visible. Controlled
+  // by the bottom tab bar. Desktop ignores this and shows all three.
+  mobileColumn: 'Potential',
+  // Mobile: stats panel collapsed by default to save vertical space
+  mobileStatsExpanded: false,
+  // Mobile: search input hidden by default, icon expands it
+  mobileSearchExpanded: false,
+  // Mobile: quick-link icons hidden behind an overflow menu
+  mobileOverflowOpen: false,
+  // Header hamburger drawer (desktop + mobile) open state
+  headerMenuOpen: false,
+  // Today modal open state — separate from modalOpen so the Today modal
+  // can overlay card detail modals without conflict
+  todayModalOpen: false,
+  // Today tasks cache — populated fresh each day in getTodayTasks()
+  todayCache: null,
+  // Which column's sort menu is currently open (null = none)
+  sortMenuOpenFor: null,
+  sortBy: {
+    'Potential':  'score-desc',
+    'Applied':    'recent',
+    'Engagement': 'recent'
+  },
+  loading: false,
 };
 
-const ACTIVE_STATUSES  = ['Sourced', 'Analysed', 'Ready to Apply', 'Applied'];
-const HOLDING_STATUSES = ['On Hold', 'Unsure', 'Rethink'];
-const ARCHIVE_STATUSES = ['Rejected', 'Withdrawn'];
-const APPLIED_SUB      = ['Applied', 'Interviewing', 'Interviewed', 'Offer', 'Accepted'];
+/* ============================================================
+   STATUS DEFINITIONS
+   ============================================================ */
 
+const STATUSES = [
+  { val: 'Sourced',                        icon: '◌', cls: 's-sourced' },
+  { val: 'Analysed',                       icon: '○', cls: 's-analysed' },
+  { val: 'Generate Docs',                  icon: '◎', cls: 's-generate' },
+  { val: 'Ready to Apply',                 icon: '✓', cls: 's-ready' },
+  { val: 'Applied',                        icon: '→', cls: 's-applied' },
+  { val: 'Applied + Interview Prep Ready', icon: '★', cls: 's-appliedprep' },
+  { val: 'Interviewing',                   icon: '◈', cls: 's-interviewing' },
+  { val: 'Interviewed',                    icon: '◉', cls: 's-interviewed' },
+  { val: 'Offer',                          icon: '♦', cls: 's-offer' },
+  { val: 'Accepted',                       icon: '✔', cls: 's-accepted' },
+  { val: 'Rejected',                       icon: '✗', cls: 's-rejected' },
+  { val: 'Rethink',                        icon: '↺', cls: 's-rethink' },
+  { val: 'Unsure',                         icon: '◇', cls: 's-unsure' },
+  { val: 'On Hold',                        icon: '⏸', cls: 's-hold' },
+  { val: 'Withdrawn',                      icon: '↩', cls: 's-withdrawn' }
+];
 
-// ============================================================
-// ROUTERS
-// ============================================================
-
-function doGet(e) {
-  try {
-    const action = (e && e.parameter && e.parameter.action) || '';
-
-    // No action = serve the HTML dashboard
-    if (!action) {
-      const template = HtmlService.createTemplateFromFile('index');
-      template.scriptUrl = ScriptApp.getService().getUrl();
-      return template.evaluate()
-        .setTitle('Job Pipeline Dashboard')
-        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
-    }
-
-    switch (action) {
-      case 'ping':         return jsonResponse({ ok: true, ts: now() });
-      case 'getPipeline':  return jsonResponse(getPipeline());
-      case 'getRow':       return jsonResponse(getRow(parseInt(e.parameter.rowId, 10)));
-      case 'getQueue':     return jsonResponse(getQueue());
-      case 'getPrompt':    return jsonResponse(getPrompt(e.parameter.type, e.parameter));
-      default:             return jsonResponse({ ok: false, error: 'Unknown action: ' + action });
-    }
-  } catch (err) {
-    return jsonResponse({ ok: false, error: String(err) });
-  }
+function getStatusInfo(val) {
+  return STATUSES.find(function (s) { return s.val === val; }) || { val: val, icon: '?', cls: 's-analysed' };
 }
 
-function doPost(e) {
-  try {
-    const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    const action = body.action || '';
-    switch (action) {
-      case 'addToQueue':            return jsonResponse(addToQueue(body));
-      case 'removeFromQueue':       return jsonResponse(removeFromQueue(body));
-      case 'clearQueue':            return jsonResponse(clearQueue());
-      case 'batchAppendAnalysed':   return jsonResponse(batchAppendAnalysed(body));
-      case 'savePhase1Docs':        return jsonResponse(savePhase1Docs(body));
-      case 'markAsApplied':         return jsonResponse(markAsApplied(body));
-      case 'saveInterviewPrep':     return jsonResponse(saveInterviewPrep(body));
-      case 'updateRoundScore':      return jsonResponse(updateRoundScore(body));
-      case 'updateCardStatus':      return jsonResponse(updateCardStatus(body));
-      case 'savePersonalAngle':     return jsonResponse(savePersonalAngle(body));
-      case 'saveNote':              return jsonResponse(saveNote(body));
-      case 'updateNote':            return jsonResponse(updateNote(body));
-      case 'deleteNote':            return jsonResponse(deleteNote(body));
-      case 'saveAdContent':         return jsonResponse(saveAdContent(body));
-      case 'saveStatusHistory':     return jsonResponse(saveStatusHistory(body));
-      case 'batchUpdateJourney':    return jsonResponse(batchUpdateJourney(body));
-      case 'appendAnalysedJob':     return jsonResponse(appendAnalysedJob(body));
-      case 'batchSaveAnalyse':      return jsonResponse(batchSaveAnalyse(body));
-      case 'batchSaveGenerateDocs': return jsonResponse(batchSaveGenerateDocs(body));
-      case 'batchSaveInterviewPrep':return jsonResponse(batchSaveInterviewPrep(body));
-      default:                      return jsonResponse({ ok: false, error: 'Unknown action: ' + action });
-    }
-  } catch (err) {
-    return jsonResponse({ ok: false, error: String(err) });
-  }
+function fitClass(score) {
+  if (score === null || score === undefined || score === '') return '';
+  const n = parseFloat(score);
+  if (isNaN(n) || n <= 0) return '';
+  const s = n > 10 ? n / 10 : n;
+  return s >= 8 ? 'h' : (s >= 6 ? 'm' : 'lo');
 }
 
 /**
- * apiRouter — single entrypoint called by the frontend via google.script.run.
+ * Normalise a stored fit score (which may be 0–100 or 0–10) into a
+ * display-friendly whole number 0–10. Rule: anything >10 came in on
+ * the 0–100 scale and gets divided by 10. Anything ≤10 is already on
+ * the display scale. Result is rounded to the nearest integer because
+ * fit scores are whole numbers only (0–10, no decimals).
  *
- * The HtmlService frontend lives in a googleusercontent.com sandbox which
- * can\'t fetch() the /exec URL on script.google.com due to CORS. Instead,
- * the frontend calls google.script.run.apiRouter({method, params/body}),
- * which Apps Script proxies directly to this function without crossing
- * origins.
- *
- * Returns a JSON STRING (not a plain object). This is intentional —
- * google.script.run\'s object serialiser silently returns null for
- * responses containing Date objects, functions, or certain nested
- * structures. Returning a string bypasses that landmine. Frontend
- * parses via JSON.parse.
- *
- * Mirrors the case switches in doGet and doPost so both behave identically
- * regardless of whether the call came via HTTP fetch or google.script.run.
+ * Added 23-Apr-2026 — cards and modal header were showing raw 78 etc.
+ * Updated to integer-only rounding at Louie's request.
  */
-function apiRouter(request) {
-  try {
-    request = request || {};
-    const method = request.method || 'GET';
-    let result;
+function displayFitScore(score) {
+  if (score === null || score === undefined || score === '') return '';
+  const n = parseFloat(score);
+  if (isNaN(n) || n <= 0) return '';
+  const s = n > 10 ? n / 10 : n;
+  return String(Math.round(s));
+}
 
-    if (method === 'GET') {
-      const params = request.params || {};
-      const action = params.action || '';
-      switch (action) {
-        case 'ping':         result = { ok: true, ts: now() }; break;
-        case 'getPipeline':  result = getPipeline(); break;
-        case 'getRow':       result = getRow(parseInt(params.rowId, 10)); break;
-        case 'getQueue':     result = getQueue(); break;
-        case 'getPrompt':    result = getPrompt(params.type, params); break;
-        default:             result = { ok: false, error: 'Unknown GET action: ' + action };
+/**
+ * Build a plain-text tooltip explaining why a card has its fit score.
+ * Pulls from key alignments, potential concerns, and tailored pitch.
+ * Native browser tooltips don\'t support formatting, so we use newlines
+ * and simple labels — works on hover, no extra DOM cost.
+ *
+ * Falls back to a generic "no analysis yet" message when the card hasn\'t
+ * been analysed (rare — usually scored cards have all this).
+ */
+function buildFitScoreTooltip(row) {
+  const score = displayFitScore(row.fitScore);
+  if (!score) return 'Not yet analysed';
+
+  const lines = ['Fit score: ' + score + '/10'];
+
+  if (isPresent(row.keyAlignments)) {
+    const aligns = String(row.keyAlignments).split(/\s*\|\s*/).filter(Boolean);
+    if (aligns.length) {
+      lines.push('');
+      lines.push('Why it fits:');
+      aligns.slice(0, 4).forEach(function (a) { lines.push('  + ' + a); });
+    }
+  }
+
+  if (isPresent(row.potentialConcerns)) {
+    const concerns = String(row.potentialConcerns).split(/\s*\|\s*/).filter(Boolean);
+    if (concerns.length) {
+      lines.push('');
+      lines.push('Concerns:');
+      concerns.slice(0, 3).forEach(function (c) { lines.push('  − ' + c); });
+    }
+  }
+
+  if (isPresent(row.tailoredPitch)) {
+    lines.push('');
+    lines.push('Pitch: ' + truncate(row.tailoredPitch, 160));
+  }
+
+  return lines.join('\n');
+}
+
+function fitColorVar(score) {
+  const cls = fitClass(score);
+  if (cls === 'h')  return 'var(--success)';
+  if (cls === 'm')  return 'var(--warning)';
+  if (cls === 'lo') return 'var(--danger)';
+  return 'var(--text-ter)';
+}
+
+/* ============================================================
+   API
+   ============================================================ */
+
+/**
+ * HtmlService frontends run inside googleusercontent.com sandbox. fetch()
+ * from that sandbox to script.google.com/exec hits CORS and is blocked
+ * for POST requests. google.script.run is the purpose-built bridge —
+ * it tunnels through the iframe boundary via postMessage internally,
+ * not HTTP, so CORS doesn\'t apply.
+ *
+ * Wrapped in a Promise with a timeout. If the call doesn\'t respond in
+ * 30 seconds we reject loudly instead of hanging the UI. All calls log
+ * to console for diagnostics — open DevTools → Console to see traffic.
+ */
+function runServerFn(fnName, args) {
+  return new Promise(function (resolve, reject) {
+    const callId = Math.random().toString(36).substring(2, 8);
+    console.log('[api→' + fnName + '] ' + callId + ' sending', args);
+
+    if (typeof google === 'undefined' || !google.script || !google.script.run) {
+      const err = new Error('google.script.run is not available — not running inside Apps Script?');
+      console.error('[api→' + fnName + '] ' + callId + ' failed:', err.message);
+      reject(err);
+      return;
+    }
+
+    // Timeout guard: if Apps Script never calls back, don\'t hang forever
+    const timeout = setTimeout(function () {
+      const err = new Error('Server call timed out after 30s: ' + fnName);
+      console.error('[api→' + fnName + '] ' + callId + ' TIMEOUT');
+      reject(err);
+    }, 30000);
+
+    google.script.run
+      .withSuccessHandler(function (result) {
+        clearTimeout(timeout);
+        // apiRouter returns a JSON string to avoid google.script.run\'s
+        // flaky object serialiser. Parse it here. Defensive: if we get
+        // back an object (older Code.gs version), use it directly.
+        let parsed = result;
+        if (typeof result === 'string') {
+          try {
+            parsed = JSON.parse(result);
+          } catch (e) {
+            const err = new Error('Server returned invalid JSON: ' + String(result).substring(0, 200));
+            console.error('[api→' + fnName + '] ' + callId + ' parse error:', err.message);
+            reject(err);
+            return;
+          }
+        }
+        if (parsed === null || parsed === undefined) {
+          const err = new Error('Server returned null — likely a serialisation failure. Check Apps Script logs.');
+          console.error('[api→' + fnName + '] ' + callId + ' null response');
+          reject(err);
+          return;
+        }
+        console.log('[api→' + fnName + '] ' + callId + ' ok', parsed);
+        resolve(parsed);
+      })
+      .withFailureHandler(function (err) {
+        clearTimeout(timeout);
+        const msg = err && err.message ? err.message : String(err);
+        console.error('[api→' + fnName + '] ' + callId + ' failed:', msg);
+        reject(new Error(msg));
+      })
+      [fnName].apply(null, args || []);
+  });
+}
+
+async function apiGet(action, params) {
+  const queryParams = Object.assign({ action: action }, params || {});
+  // Show the floating indicator for genuine user-visible fetches. "ping" is
+  // excluded because it\'s a silent health check. All other GETs show the
+  // rotating quip so nothing ever happens behind a blank screen.
+  const indicatorLabel = (function () {
+    if (action === 'ping') return null;
+    if (/pipeline/i.test(action)) return 'Loading pipeline';
+    if (/queue/i.test(action)) return 'Loading queue';
+    if (/prompt/i.test(action)) return 'Building prompt';
+    if (/^get/i.test(action)) return 'Loading';
+    return null;
+  })();
+  const token = indicatorLabel ? showSaveIndicator(indicatorLabel) : null;
+  try {
+    return await runServerFn('apiRouter', [{ method: 'GET', params: queryParams }]);
+  } finally {
+    if (token !== null) hideSaveIndicator(token);
+  }
+}
+
+async function apiPost(action, body) {
+  const payload = Object.assign({ action: action }, body || {});
+  // Actions that represent genuine saves. Read-like POSTs (none currently,
+  // but future-proofed) can be excluded by name to skip the indicator.
+  // The label shown on the indicator pill depends on the action family.
+  const indicatorLabel = (function () {
+    if (/^batch/i.test(action)) return 'Running batch';
+    if (/^save/i.test(action)) return 'Saving';
+    if (/Queue/i.test(action)) return 'Updating queue';
+    if (/^update/i.test(action) || /^delete/i.test(action)) return 'Saving';
+    if (/^mark/i.test(action)) return 'Saving';
+    if (/^append/i.test(action)) return 'Saving';
+    return null;  // unknown POSTs get no indicator
+  })();
+  const token = indicatorLabel ? showSaveIndicator(indicatorLabel) : null;
+  try {
+    return await runServerFn('apiRouter', [{ method: 'POST', body: payload }]);
+  } finally {
+    if (token !== null) hideSaveIndicator(token);
+  }
+}
+
+/* ============================================================
+   THEME + SORT PREFS
+   ============================================================ */
+
+function initTheme() {
+  const saved = localStorage.getItem('jp-theme');
+  const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const theme = saved || (prefersDark ? 'dark' : 'light');
+  document.documentElement.setAttribute('data-theme', theme);
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'light';
+  const next = current === 'light' ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('jp-theme', next);
+  render();
+}
+
+function loadSortPrefs() {
+  try {
+    const saved = localStorage.getItem('jp-sort');
+    if (saved) state.sortBy = Object.assign({}, state.sortBy, JSON.parse(saved));
+  } catch (e) {}
+}
+function saveSortPrefs() {
+  try { localStorage.setItem('jp-sort', JSON.stringify(state.sortBy)); } catch (e) {}
+}
+function setSort(column, sortType) {
+  state.sortBy[column] = sortType;
+  saveSortPrefs();
+  render();
+}
+
+function setStatsTab(tab) {
+  state.statsTab = tab;
+  render();
+}
+
+function getRowDate(row) {
+  const d = row.applicationDate || row.lastActivity || row.dateAdded || row.analysisDate;
+  return d ? new Date(d).getTime() : 0;
+}
+
+function getSortFn(sortType) {
+  switch (sortType) {
+    case 'score-desc': return function (a, b) { return (parseInt(b.fitScore, 10) || 0) - (parseInt(a.fitScore, 10) || 0); };
+    case 'score-asc':  return function (a, b) { return (parseInt(a.fitScore, 10) || 0) - (parseInt(b.fitScore, 10) || 0); };
+    case 'recent':     return function (a, b) { return getRowDate(b) - getRowDate(a); };
+    case 'oldest':     return function (a, b) { return getRowDate(a) - getRowDate(b); };
+    case 'company':    return function (a, b) { return (a.company || '').localeCompare(b.company || ''); };
+    default:           return function () { return 0; };
+  }
+}
+
+/* ============================================================
+   INIT + LOAD
+   ============================================================ */
+
+async function init() {
+  // Start rotating quips in the initial loader immediately so there\'s
+  // movement even on slow first-paints. Both main (fast) and sub (slow).
+  startQuipRotation();
+  startSubQuipRotation();
+  try {
+    await Promise.all([loadPipeline(), loadQueue()]);
+    stopQuipRotation();
+    stopSubQuipRotation();
+    render();
+  } catch (err) {
+    stopQuipRotation();
+    stopSubQuipRotation();
+    document.getElementById('app').className = 'wrap';
+    document.getElementById('app').innerHTML =
+      '<div class="empty-state"><p style="color:var(--danger-text);font-weight:500;">Failed to load pipeline</p><p>' + escapeHtml(err.message) + '</p></div>';
+  }
+}
+
+async function loadPipeline() {
+  const res = await apiGet('getPipeline');
+  if (!res.ok) throw new Error(res.error || 'Failed to load pipeline');
+  state.pipeline = res.rows || [];
+}
+
+async function loadQueue() {
+  const res = await apiGet('getQueue');
+  if (!res.ok) throw new Error(res.error || 'Failed to load queue');
+  state.queue = res.items || [];
+  state.queueCount = res.count || 0;
+}
+
+async function refreshAll() {
+  const token = showSaveIndicator('Refreshing');
+  try {
+    await Promise.all([loadPipeline(), loadQueue()]);
+    render();
+  } finally {
+    hideSaveIndicator(token);
+  }
+}
+
+/* ============================================================
+   RENDER ROOT
+   ============================================================ */
+
+function render() {
+  const app = document.getElementById('app');
+  app.className = 'wrap';
+  // Layout order: header (brand + stats + actions), then a notification zone
+  // that sits below the header\'s horizontal rule — batch toolbar when active,
+  // Ready to Apply banner when applicable — then the columns.
+  app.innerHTML =
+    renderHeader() +
+    '<div class="notification-zone">' +
+      renderBatchToolbar() +
+      renderReadyToApplyBar() +
+    '</div>' +
+    renderQueueStrip() +
+    renderFunnel() +
+    renderArchive() +
+    renderMobileTabBar();
+  renderModal();
+  renderPopovers();
+  renderApplyPrompt();
+}
+
+function renderPopovers() {
+  const root = document.getElementById('popover-root');
+  if (!root) return;
+  root.innerHTML = renderOutcomePopover();
+}
+
+function renderApplyPrompt() {
+  const root = document.getElementById('apply-prompt-root');
+  if (!root) return;
+  if (!state.applyPrompt) {
+    // Animate out, then clear
+    const existing = root.querySelector('.apply-prompt');
+    if (existing) {
+      existing.classList.remove('visible');
+      setTimeout(function () { if (root) root.innerHTML = ''; }, 300);
+    }
+    return;
+  }
+  const row = state.pipeline.find(function (r) { return r.rowId === state.applyPrompt.rowId; });
+  if (!row) { state.applyPrompt = null; root.innerHTML = ''; return; }
+  // Auto-dismiss if the card is no longer in Ready to Apply (user marked it
+  // applied through another path, or moved/archived the card)
+  if (row.status !== 'Ready to Apply') {
+    state.applyPrompt = null;
+    const existing = root.querySelector('.apply-prompt');
+    if (existing) {
+      existing.classList.remove('visible');
+      setTimeout(function () { if (root) root.innerHTML = ''; }, 300);
+    } else {
+      root.innerHTML = '';
+    }
+    return;
+  }
+
+  // If already in there, don't rebuild — preserves the entrance animation
+  const existing = root.querySelector('.apply-prompt');
+  if (existing && existing.dataset.rowId === String(row.rowId)) return;
+
+  root.innerHTML = (
+    '<div class="apply-prompt" data-row-id="' + row.rowId + '" role="dialog" aria-live="polite">' +
+      '<div class="apply-prompt-text">' +
+        '<strong>Did you submit your application?</strong>' +
+        '<span>' + escapeHtml(row.role) + ' · ' + escapeHtml(row.company) + '</span>' +
+      '</div>' +
+      '<div class="apply-prompt-actions">' +
+        '<button class="apply-prompt-btn" onclick="dismissApplyPrompt()">Not yet</button>' +
+        '<button class="apply-prompt-btn primary" onclick="confirmApplyPrompt()">Mark as applied</button>' +
+      '</div>' +
+      '<button class="apply-prompt-close" onclick="dismissApplyPrompt()" aria-label="Dismiss">✕</button>' +
+    '</div>'
+  );
+  const el = root.querySelector('.apply-prompt');
+  requestAnimationFrame(function () { if (el) el.classList.add('visible'); });
+}
+
+function openJobAdAndPromptApply(rowId, url) {
+  if (!url) { toast('No URL for this job', 'error'); return; }
+  window.open(url, '_blank', 'noopener');
+  // Show the prompt immediately so it's waiting when the user switches back
+  state.applyPrompt = { rowId: rowId };
+  renderApplyPrompt();
+}
+
+function dismissApplyPrompt() {
+  state.applyPrompt = null;
+  renderApplyPrompt();
+}
+
+function confirmApplyPrompt() {
+  if (!state.applyPrompt) return;
+  const rowId = state.applyPrompt.rowId;
+  state.applyPrompt = null;
+  renderApplyPrompt();
+  openModal('markAsApplied', { rowId: rowId });
+}
+
+/**
+ * Mobile bottom tab bar — fixed-position iOS-style navigation between the
+ * three columns. Only visible on narrow viewports; CSS hides on desktop.
+ * Counts show total active cards per column. Tap switches which column
+ * renders in the single-column mobile funnel.
+ */
+function renderMobileTabBar() {
+  const active = state.mobileColumn || 'Potential';
+  const counts = {
+    Potential:  countActiveInColumn('Potential'),
+    Applied:    countActiveInColumn('Applied'),
+    Engagement: countActiveInColumn('Engagement')
+  };
+  const tab = function (name, icon) {
+    const cls = name === active ? 'mobile-tab active' : 'mobile-tab';
+    return (
+      '<button class="' + cls + '" onclick="setMobileColumn(\'' + name + '\')">' +
+        '<span class="mobile-tab-icon">' + icon + '</span>' +
+        '<span class="mobile-tab-label">' + columnLabel(name) + '</span>' +
+        (counts[name] > 0 ? '<span class="mobile-tab-count">' + counts[name] + '</span>' : '') +
+      '</button>'
+    );
+  };
+  return (
+    '<nav class="mobile-tabbar" role="tablist" aria-label="Pipeline columns">' +
+      tab('Potential',  '◌') +
+      tab('Applied',    '◎') +
+      tab('Engagement', '◉') +
+    '</nav>'
+  );
+}
+
+function countActiveInColumn(columnStatus) {
+  // Match the grouping logic in renderColumn — count cards whose status
+  // maps to this column. Holding statuses excluded so the badge reflects
+  // "live" cards. Rejected cards that reached interview route to
+  // Engagement; otherwise they go to archive and don\'t count here.
+  const HOLDING = ['On Hold', 'Unsure', 'Rethink'];
+  return state.pipeline.filter(function (r) {
+    if (HOLDING.indexOf(r.status) > -1) return false;
+    // Rejected with interview → Engagement; rejected without → archive
+    if (r.status === 'Rejected') {
+      return columnStatus === 'Engagement' && rejectedReachedInterview(r);
+    }
+    if (r.status === 'Withdrawn') return false;  // archive only
+    const col = columnForStatus(r.status);
+    return col === columnStatus;
+  }).length;
+}
+
+function setMobileColumn(name) {
+  state.mobileColumn = name;
+  render();
+  // Scroll to top of funnel for a clean context switch
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+/**
+ * Teal notification bar showing Ready to Apply cards. Sits in the
+ * notification zone between the header and the columns. Only renders
+ * when there\'s at least one Ready to Apply card. Each card in the bar
+ * is clickable — opens the detail modal focused on the docs tab.
+ *
+ * Moved from being a column because Louie only ever has 1-2 Ready to
+ * Apply cards at once and always submits them quickly. Treating Ready
+ * to Apply as an inbox-style notification matches the actual workflow
+ * better than giving it prime column real estate.
+ */
+function renderReadyToApplyBar() {
+  const ready = state.pipeline.filter(function (r) { return r.status === 'Ready to Apply'; });
+  if (!ready.length) return '';
+
+  // Oldest first — if a card has been Ready to Apply for a while, nudge it
+  const sorted = ready.slice().sort(function (a, b) {
+    const da = new Date(a.stageEnteredAt || a.dateAdded || 0).getTime();
+    const db = new Date(b.stageEnteredAt || b.dateAdded || 0).getTime();
+    return da - db;
+  });
+
+  const cards = sorted.slice(0, 3).map(function (r) {
+    const daysStr = (function () {
+      const d = daysSince(r.stageEnteredAt || r.dateAdded);
+      if (d === null) return '';
+      if (d === 0) return 'today';
+      if (d === 1) return '1 day ago';
+      return d + ' days ago';
+    })();
+    return (
+      '<button class="ready-card" onclick="openCardDetail(' + r.rowId + ')">' +
+        '<span class="ready-card-role">' + escapeHtml(r.role || '?') + '</span>' +
+        '<span class="ready-card-company">' + escapeHtml(r.company || '?') + '</span>' +
+        (daysStr ? '<span class="ready-card-age">' + daysStr + '</span>' : '') +
+      '</button>'
+    );
+  }).join('');
+
+  const overflow = sorted.length > 3
+    ? '<span class="ready-more">+ ' + (sorted.length - 3) + ' more</span>'
+    : '';
+
+  return (
+    '<div class="ready-bar" role="region" aria-label="Ready to apply">' +
+      '<div class="ready-bar-label">' +
+        '<span class="ready-bar-icon">✉</span>' +
+        '<span class="ready-bar-title">Ready to apply</span>' +
+        '<span class="ready-bar-count">' + ready.length + '</span>' +
+      '</div>' +
+      '<div class="ready-bar-cards">' +
+        cards +
+        overflow +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function renderBatchToolbar() {
+  if (!state.batchMode) return '';
+  const ids = getSelectedRowIds();
+  const n = ids.length;
+  const actionLabels = {
+    analyse: 'Re-analyse',
+    generateDocs: 'Generate docs',
+    interviewPrep: 'Interview prep',
+    updateJourney: 'Update journey'
+  };
+  const hints = {
+    analyse: 'Click Analysed, Rethink or Unsure cards to select.',
+    generateDocs: 'Click Analysed cards to select.',
+    interviewPrep: 'Click Applied (or later) cards to select.',
+    updateJourney: 'Click any card to select. Backdates and fills journey gaps for selected cards.'
+  };
+  const runDisabled = n === 0 ? ' disabled' : '';
+
+  // Update journey opens a config modal first (status/date template), so
+  // its primary button label is "Configure", not "Run batch".
+  const primaryLabel = state.batchMode === 'updateJourney'
+    ? 'Configure (' + n + ')'
+    : 'Run batch (' + n + ')';
+
+  return (
+    '<div class="batch-toolbar">' +
+      '<div class="batch-toolbar-inner">' +
+        '<div class="batch-toolbar-label">' +
+          '<strong>Batch ' + actionLabels[state.batchMode] + '</strong>' +
+          '<span class="batch-toolbar-hint">' + hints[state.batchMode] + '</span>' +
+        '</div>' +
+        '<div class="batch-toolbar-count">' + n + ' selected</div>' +
+        '<div class="batch-toolbar-actions">' +
+          '<button class="primary"' + runDisabled + ' onclick="runBatch()">' + primaryLabel + '</button>' +
+          (n > 0 ? '<button class="ghost" onclick="clearBatchSelection()">Clear</button>' : '') +
+          '<button class="ghost" onclick="exitBatchMode()">Cancel</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+async function runBatch() {
+  const action = state.batchMode;
+  if (!action) return;
+  const eligibleIds = getSelectedRowIds();
+  if (!eligibleIds.length) { toast('No cards selected', 'error'); return; }
+
+  // Update journey doesn\'t use the prompt-copy + paste-back flow; it opens
+  // a template configuration modal where the user picks status/date pairs,
+  // then submits directly to the batchUpdateJourney backend.
+  if (action === 'updateJourney') {
+    openModal('batchUpdateJourney', { rowIds: eligibleIds });
+    return;
+  }
+
+  const typeMap = { analyse: 'batchAnalyse', generateDocs: 'batchGenerateDocs', interviewPrep: 'batchInterviewPrep' };
+  try {
+    const res = await apiGet('getPrompt', { type: typeMap[action], rowIds: eligibleIds.join(',') });
+    if (!res.ok) throw new Error(res.error || 'Failed to build prompt');
+    await copyToClipboard(res.prompt, 'Batch prompt copied (' + eligibleIds.length + ' jobs)');
+    openModal('batchPasteBack', { action: action, rowIds: eligibleIds });
+  } catch (err) {
+    toast('Error: ' + err.message, 'error');
+  }
+}
+
+function renderHeader() {
+  const counts = countByColumn();
+  const archivedCount = state.pipeline.filter(function (r) {
+    if (r.status === 'Withdrawn') return true;
+    if (r.status === 'Rejected' && !rejectedReachedInterview(r)) return true;
+    return false;
+  }).length;
+  const theme = document.documentElement.getAttribute('data-theme') || 'light';
+  const themeIcon = theme === 'dark'
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+
+  const allActive = state.pipeline.filter(function (r) { return ['Analysed', 'Ready to Apply', 'Applied', 'Interviewing', 'Interviewed', 'Offer', 'Accepted'].indexOf(r.status) > -1; });
+  // Normalise EACH score to the 0–10 scale before averaging, so a mixed sheet
+  // (some rows stored as 0–100, some as 0–10) produces a correct average.
+  // Without this, a row at 82 and a row at 7.8 would average to 44.9, which
+  // is clearly garbage. parseFloat (not parseInt) to keep decimals like 7.8.
+  const normalisedScores = allActive
+    .map(function (r) { return parseFloat(r.fitScore); })
+    .filter(function (n) { return !isNaN(n) && n > 0; })
+    .map(function (n) { return n > 10 ? n / 10 : n; });
+  const avgFitNum = normalisedScores.length
+    ? (normalisedScores.reduce(function (a, b) { return a + b; }, 0) / normalisedScores.length)
+    : 0;
+  const avgFit = avgFitNum ? String(Math.round(avgFitNum)) : '0';
+
+  // ---------- STATS MATRIX ----------
+  // Three time windows × three events. "Analysed" events are counted by
+  // dateAdded (when the card entered the pipeline); "Applied" by
+  // applicationDate; "Interviewing" by the first time the status flipped
+  // to Interviewing (scanned from statusHistory). This gives honest
+  // activity counts regardless of the card's CURRENT status — a card
+  // that went Applied on Monday and Rejected on Thursday still counts
+  // in Applied for the window it was applied in.
+  const DAY_MS = 86400 * 1000;
+  const nowDate = new Date();
+  const todayStart = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate()).getTime();
+  const yesterdayStart = todayStart - DAY_MS;
+  const sevenDaysAgo = todayStart - 7 * DAY_MS;
+
+  function inWindow(dateVal, windowStart, windowEnd) {
+    if (!dateVal) return false;
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return false;
+    const t = d.getTime();
+    return t >= windowStart && t < windowEnd;
+  }
+
+  // Find the earliest time a card's statusHistory shows a given status.
+  // Returns ISO string or null. Used for interviewing counts so we count
+  // each card once at the moment it FIRST hit Interviewing, not repeatedly
+  // if the card bounced back and forth.
+  function firstTimeStatus(row, status) {
+    const h = Array.isArray(row.statusHistory) ? row.statusHistory : [];
+    for (var i = 0; i < h.length; i++) {
+      if (h[i].status === status && h[i].at) return h[i].at;
+    }
+    return null;
+  }
+
+  function countInWindow(getter, windowStart, windowEnd) {
+    return state.pipeline.filter(function (r) {
+      return inWindow(getter(r), windowStart, windowEnd);
+    }).length;
+  }
+
+  // Helper: has this card EVER been at the given status? Checks both
+  // current status and history. Used for Total counts where we want a
+  // lifetime tally regardless of whether a date was captured at the time.
+  function hasEverBeenStatus(row, status) {
+    if (row.status === status) return true;
+    const h = Array.isArray(row.statusHistory) ? row.statusHistory : [];
+    return h.some(function (e) { return e.status === status; });
+  }
+
+  // Applied is a bit broader — once a card hits Applied or any later
+  // substage, it counts as "has been Applied". Rejected/Withdrawn don't
+  // automatically imply Applied, but in practice they always are because
+  // the lock prevents reaching those from pre-Applied states.
+  const APPLIED_STAGES = ['Applied', 'Interviewing', 'Interviewed', 'Offer', 'Accepted', 'Rejected', 'Withdrawn'];
+  function hasEverBeenApplied(row) {
+    if (APPLIED_STAGES.indexOf(row.status) > -1) return true;
+    const h = Array.isArray(row.statusHistory) ? row.statusHistory : [];
+    return h.some(function (e) { return APPLIED_STAGES.indexOf(e.status) > -1; });
+  }
+
+  const INF = Infinity;
+  const todayEnd = todayStart + DAY_MS;
+  const stats = {
+    today: {
+      sourced:      countInWindow(function (r) { return firstTimeStatus(r, 'Sourced'); }, todayStart, todayEnd),
+      readyToApply: countInWindow(function (r) { return firstTimeStatus(r, 'Ready to Apply'); }, todayStart, todayEnd),
+      applied:      countInWindow(function (r) { return r.applicationDate; }, todayStart, todayEnd),
+      interviewing: countInWindow(function (r) { return firstTimeStatus(r, 'Interviewing'); }, todayStart, todayEnd),
+      interviewed:  countInWindow(function (r) { return firstTimeStatus(r, 'Interviewed'); }, todayStart, todayEnd)
+    },
+    yesterday: {
+      sourced:      countInWindow(function (r) { return firstTimeStatus(r, 'Sourced'); }, yesterdayStart, todayStart),
+      readyToApply: countInWindow(function (r) { return firstTimeStatus(r, 'Ready to Apply'); }, yesterdayStart, todayStart),
+      applied:      countInWindow(function (r) { return r.applicationDate; }, yesterdayStart, todayStart),
+      interviewing: countInWindow(function (r) { return firstTimeStatus(r, 'Interviewing'); }, yesterdayStart, todayStart),
+      interviewed:  countInWindow(function (r) { return firstTimeStatus(r, 'Interviewed'); }, yesterdayStart, todayStart)
+    },
+    last7: {
+      sourced:      countInWindow(function (r) { return firstTimeStatus(r, 'Sourced'); }, sevenDaysAgo, todayEnd),
+      readyToApply: countInWindow(function (r) { return firstTimeStatus(r, 'Ready to Apply'); }, sevenDaysAgo, todayEnd),
+      applied:      countInWindow(function (r) { return r.applicationDate; }, sevenDaysAgo, todayEnd),
+      interviewing: countInWindow(function (r) { return firstTimeStatus(r, 'Interviewing'); }, sevenDaysAgo, todayEnd),
+      interviewed:  countInWindow(function (r) { return firstTimeStatus(r, 'Interviewed'); }, sevenDaysAgo, todayEnd)
+    }
+  };
+
+  // Tabs switch between EVENT TYPES. Three numbers per tab are TIME WINDOWS:
+  // Today (since midnight) / Yesterday (previous calendar day) / Last 7 days.
+  // Calendar-based windows, not rolling — Today means anything since 00:00
+  // local time today. Default tab = Applied.
+  const activeTab = state.statsTab || 'applied';
+  const windowData = {
+    today:     stats.today[activeTab]     || 0,
+    yesterday: stats.yesterday[activeTab] || 0,
+    last7:     stats.last7[activeTab]     || 0
+  };
+
+  // Build mobile-collapsed stats summary line — condenses the 5-tab × 3-window
+  // grid into a single tappable line showing just the active tab values.
+  // Tapping expands into the full detailed grid below.
+  const activeTabLabel = {
+    sourced:      'Sourced',
+    readyToApply: 'Ready to apply',
+    applied:      'Applied',
+    interviewing: 'Interviewing',
+    interviewed:  'Interviewed'
+  }[activeTab] || capitalise(activeTab);
+  const statsMobileSummary =
+    '<button class="stats-mobile-summary" onclick="toggleMobileStats()" aria-expanded="' + (state.mobileStatsExpanded ? 'true' : 'false') + '">' +
+      '<span class="stats-mobile-label">' + activeTabLabel + '</span>' +
+      '<span class="stats-mobile-values">' +
+        '<span><b>' + windowData.today + '</b> today</span>' +
+        '<span><b>' + windowData.yesterday + '</b> yest</span>' +
+        '<span><b>' + windowData.last7 + '</b> 7d</span>' +
+      '</span>' +
+      '<span class="stats-mobile-caret">' + (state.mobileStatsExpanded ? '▴' : '▾') + '</span>' +
+    '</button>';
+
+  const tabHtml =
+    statsMobileSummary +
+    '<div class="stats-panel' + (state.mobileStatsExpanded ? ' mobile-expanded' : '') + '">' +
+      '<div class="stats-tabs">' +
+        '<button class="stats-tab ' + (activeTab === 'sourced' ? 'active' : '') + '" onclick="setStatsTab(\'sourced\')">Sourced</button>' +
+        '<button class="stats-tab ' + (activeTab === 'readyToApply' ? 'active' : '') + '" onclick="setStatsTab(\'readyToApply\')">Ready</button>' +
+        '<button class="stats-tab ' + (activeTab === 'applied' ? 'active' : '') + '" onclick="setStatsTab(\'applied\')">Applied</button>' +
+        '<button class="stats-tab ' + (activeTab === 'interviewing' ? 'active' : '') + '" onclick="setStatsTab(\'interviewing\')">Interviewing</button>' +
+        '<button class="stats-tab ' + (activeTab === 'interviewed' ? 'active' : '') + '" onclick="setStatsTab(\'interviewed\')">Interviewed</button>' +
+      '</div>' +
+      '<div class="stats-values">' +
+        '<div class="stats-value-cell"><span class="stats-value-num">' + windowData.today + '</span><span class="stats-value-label">Today</span></div>' +
+        '<div class="stats-value-cell"><span class="stats-value-num accent">' + windowData.yesterday + '</span><span class="stats-value-label">Yesterday</span></div>' +
+        '<div class="stats-value-cell"><span class="stats-value-num success">' + windowData.last7 + '</span><span class="stats-value-label">Last 7 days</span></div>' +
+      '</div>' +
+    '</div>';
+
+  return (
+    '<div class="header">' +
+      '<div class="header-grid">' +
+        '<div class="header-col-left">' +
+          '<div class="brand">' +
+            '<div class="brand-mark">' +
+              '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+                '<rect x="2" y="5" width="8" height="14" rx="2" fill="currentColor" opacity="0.35"/>' +
+                '<rect x="11" y="8" width="8" height="11" rx="2" fill="currentColor" opacity="0.65"/>' +
+                '<rect x="14" y="3" width="8" height="16" rx="2" fill="currentColor"/>' +
+              '</svg>' +
+            '</div>' +
+            '<div class="brand-text">' +
+              '<h1 class="header-title">Louie Radburnd<span class="brand-dot">.</span> <span class="brand-suffix">Pipeline</span></h1>' +
+              '<div class="header-subtitle">' +
+                '<span><b>' + counts.active + '</b> Active</span>' +
+                '<span class="subtitle-sep">·</span>' +
+                '<span><b>' + counts.engaged + '</b> Engaged</span>' +
+                '<span class="subtitle-sep">·</span>' +
+                '<span class="avg-fit-inline" style="color:' + fitColorVar(avgFitNum) + ';">Avg fit ' + avgFit + '</span>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="header-col-centre">' +
+          tabHtml +
+        '</div>' +
+        '<div class="header-col-right">' +
+          /* Always-visible actions: Today pill + Add jobs + hamburger. */
+          '<div class="header-actions">' +
+            renderTodayPill() +
+            '<button class="accent header-add-btn" onclick="openModal(\'intake\')">+ Add jobs</button>' +
+            '<button class="header-dev-btn" onclick="copyDevPrompt()" title="Copy a prompt to start a new tech-update chat in this project" aria-label="Copy dev prompt">' +
+              '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>' +
+              '<span>Dev</span>' +
+            '</button>' +
+            '<button class="header-burger" onclick="toggleHeaderMenu()" title="More options" aria-label="More options" aria-expanded="' + (state.headerMenuOpen ? 'true' : 'false') + '">' +
+              '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>' +
+            '</button>' +
+          '</div>' +
+          /* Hamburger-revealed drawer: everything else (search, quick-links,
+             batch, refresh, theme). Single toggle drives both desktop + mobile. */
+          (state.headerMenuOpen ? renderHeaderMenu(themeIcon) : '') +
+        '</div>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+/**
+ * The Today pill in the header — always visible. Shows progress against
+ * daily tasks as a ring + fraction. Clicking opens the Today modal.
+ */
+function renderTodayPill() {
+  const today = getTodayTasks();
+  const done = today.tasks.filter(function (t) { return t.done; }).length;
+  const total = today.tasks.length;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const label = total > 0 ? (done + '/' + total) : 'Today';
+  return (
+    '<button class="today-pill ' + (pct === 100 ? 'complete' : '') + '" onclick="openTodayModal()" title="' + (today.paused ? 'Today paused' : 'Daily accountability') + '">' +
+      '<span class="today-pill-ring" style="--pct:' + pct + ';" aria-hidden="true"></span>' +
+      '<span class="today-pill-label">Today <b>' + label + '</b></span>' +
+      (today.streak >= 2 ? '<span class="today-pill-streak">🔥 ' + today.streak + '</span>' : '') +
+    '</button>'
+  );
+}
+
+/**
+ * The everything-drawer shown when hamburger is clicked. Contains search,
+ * quick-links, batch menu, refresh, theme. Reveals on desktop OR mobile
+ * from the same state flag (state.headerMenuOpen) — single drawer for
+ * consistency. Positioned absolutely under the hamburger.
+ */
+function renderHeaderMenu(themeIcon) {
+  return (
+    '<div class="header-menu" role="menu">' +
+      /* Mobile-only: Today pill + Add jobs promoted into the drawer since
+         they\'re hidden from the top bar to save horizontal real estate. */
+      '<div class="header-menu-section header-menu-mobile-only">' +
+        '<div class="header-menu-row">' +
+          '<div style="flex:1; min-width:0;">' + renderTodayPill() + '</div>' +
+          '<button class="accent" style="height:34px; padding:0 14px; font-size:13px; white-space:nowrap;" onclick="openModal(\'intake\'); toggleHeaderMenu();">+ Add jobs</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="header-menu-section">' +
+        '<input type="text" class="search-input header-menu-search" placeholder="Search jobs..." value="' + escapeAttr(state.search || '') + '" oninput="setSearch(this.value)" />' +
+      '</div>' +
+      '<div class="header-menu-section">' +
+        '<div class="header-menu-row">' +
+          '<div class="batch-menu" style="flex:1;">' +
+            '<button class="batch-menu-trigger" onclick="toggleBatchMenu(event)" aria-haspopup="true" style="width:100%;">Batch actions ▾</button>' +
+            '<div class="batch-menu-dropdown" id="batch-menu-dropdown">' +
+              '<button onclick="enterBatchMode(\'analyse\')">Re-analyse ads</button>' +
+              '<button onclick="enterBatchMode(\'generateDocs\')">Generate docs</button>' +
+              '<button onclick="enterBatchMode(\'interviewPrep\')">Interview prep</button>' +
+              '<button onclick="enterBatchMode(\'updateJourney\')">Update journey</button>' +
+            '</div>' +
+          '</div>' +
+          '<button class="header-menu-icon" onclick="refreshAll()" title="Refresh" aria-label="Refresh">' +
+            '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>' +
+          '</button>' +
+          '<button class="header-menu-icon" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle theme">' + themeIcon + '</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="header-menu-section">' +
+        '<div class="header-menu-label">Quick links</div>' +
+        '<div class="header-menu-links">' +
+          '<a class="quick-link" href="https://docs.google.com/document/d/1pUewEdd74tcd56CSnRBpTtVn6YL4kBbiLihlC6dcy68/edit" target="_blank" rel="noopener">' +
+            '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>' +
+            '<span>Master resume</span>' +
+          '</a>' +
+          '<a class="quick-link" href="https://docs.google.com/document/d/1WKyJDrswMWalqvAQTYmtMxKLliNPQjt_R90K06Lv-ks/edit" target="_blank" rel="noopener">' +
+            '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>' +
+            '<span>Cover letter template</span>' +
+          '</a>' +
+          '<a class="quick-link" href="https://drive.google.com/drive/u/0/folders/1vJwIj9MccdcQUE01zVeTmqiExawMcnJ4" target="_blank" rel="noopener">' +
+            '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>' +
+            '<span>Drive folder A</span>' +
+          '</a>' +
+          '<a class="quick-link" href="https://drive.google.com/drive/u/0/folders/1bm8fa6KQsBeXzFV1gIIQ9bBwK_b-CPM3" target="_blank" rel="noopener">' +
+            '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>' +
+            '<span>Drive folder B</span>' +
+          '</a>' +
+          '<a class="quick-link" href="https://docs.google.com/spreadsheets/d/13cSuuItK8YfiNGa9xJDN3Eds4zOHVsUHtWQGyu0h53M/edit?gid=218974103#gid=218974103" target="_blank" rel="noopener">' +
+            '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>' +
+            '<span>Pipeline sheet</span>' +
+          '</a>' +
+          '<a class="quick-link" href="https://script.google.com/home/projects/17-xYOJuJ5yF0x1DIUVLfT46AXw6jrg4Yug70e7V589dp8afCZ9BbLgTx/edit" target="_blank" rel="noopener">' +
+            '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>' +
+            '<span>Apps Script</span>' +
+          '</a>' +
+        '</div>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function setSearch(val) {
+  state.search = val;
+  render();
+  // Re-focus the search input after re-render. There can be two instances
+  // (header menu drawer input + legacy .search-input), so pick the one
+  // that matches our new value to avoid focus jumping to the wrong field.
+  const inputs = document.querySelectorAll('.search-input');
+  for (let i = 0; i < inputs.length; i++) {
+    if (inputs[i].value === val) {
+      inputs[i].focus();
+      const len = inputs[i].value.length;
+      inputs[i].setSelectionRange(len, len);
+      break;
+    }
+  }
+}
+
+function renderQueueStrip() {
+  if (!state.queueCount) return '';
+  const breakdown = sourceBreakdown(state.queue);
+  return (
+    '<div class="queue-strip">' +
+      '<div class="queue-strip-text">' +
+        '<span class="queue-dot"></span>' +
+        '<span class="queue-label">' + state.queueCount + ' job' + (state.queueCount > 1 ? 's' : '') + ' queued for analysis</span>' +
+        '<span class="queue-breakdown">' + breakdown + '</span>' +
+      '</div>' +
+      '<div class="queue-strip-actions">' +
+        '<button onclick="openModal(\'intake\')">Open queue</button>' +
+        '<button class="accent" onclick="copyAnalysePrompt()">Copy analyse prompt</button>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+/**
+ * True when the viewport is narrow enough that we should switch to the
+ * mobile layout (bottom tab bar, collapsed stats, icon-only actions).
+ * 820px matches the existing CSS breakpoint so JS and CSS stay in sync.
+ */
+function isMobile() {
+  return window.innerWidth <= 820;
+}
+
+function renderFunnel() {
+  if (isMobile()) {
+    // Mobile: only render the currently-active column. Bottom tab bar
+    // drives state.mobileColumn. Keeps vertical scroll length manageable.
+    const active = state.mobileColumn || 'Potential';
+    return '<div class="funnel funnel-mobile">' + renderColumn(active) + '</div>';
+  }
+  return (
+    '<div class="funnel">' +
+      renderColumn('Potential') +
+      renderColumn('Applied') +
+      renderColumn('Engagement') +
+    '</div>'
+  );
+}
+
+/**
+ * True when an Applied card's application-date is older than FOLLOW_UP_DAYS.
+ * Only 'Applied' counts — once moved to Interviewing+, the follow-up
+ * prompt is counterproductive, so those cards sort normally.
+ */
+function isFollowUpDue(row) {
+  if (row.status !== 'Applied') return false;
+  const days = daysSince(row.applicationDate);
+  return days !== null && days > FOLLOW_UP_DAYS;
+}
+
+/* ============================================================
+   COLUMN TABS + DATE DIVIDERS
+   ============================================================ */
+
+/**
+ * Tab definitions per column. Each tab is a filter applied to the cards
+ * in that column's active group. "All" shows everything, with status
+ * sections. A specific status tab shows only cards of that status, with
+ * date dividers inside (no status section since it's already filtered).
+ *
+ * Tab order reflects pipeline order within each column (oldest-stage
+ * first is more intuitive as a "forward" funnel). "All" always first.
+ */
+const COLUMN_TABS = {
+  'Potential':  ['All', 'Ready to Apply', 'Analysed', 'Sourced'],
+  'Applied':    ['All', 'Recent', 'Follow up', 'Ghosted'],
+  'Engagement': ['All', 'Interviewing', 'Interviewed', 'Offer', 'Rejected']
+};
+
+/**
+ * Applied column uses age-based tabs rather than status-based (since every
+ * card is "Applied"). These thresholds map to the real workflow:
+ *   Recent = applied <7 days ago — sit tight, no action needed
+ *   Follow up = 7-21 days ago — consider reaching out to recruiter/hiring manager
+ *   Ghosted = >21 days, no reply — accept it, shift focus elsewhere
+ * Boundary logic: Recent < 7, Follow up 7 to 21 inclusive, Ghosted > 21.
+ */
+const APPLIED_TAB_THRESHOLDS = {
+  'Recent':    { min: 0,  max: 6   },
+  'Follow up': { min: 7,  max: 21  },
+  'Ghosted':   { min: 22, max: 9999 }
+};
+
+/**
+ * Status order used when rendering the "All" tab — defines which status
+ * section comes first, second, etc. This is the natural reading order
+ * for each funnel stage.
+ */
+const STATUS_SECTION_ORDER = {
+  'Potential':  ['Ready to Apply', 'Analysed', 'Sourced'],
+  'Engagement': ['Accepted', 'Offer', 'Interviewed', 'Interviewing', 'Rejected']
+};
+
+/**
+ * Returns the current tab for a given column. Falls back to "All" for
+ * columns that support tabs; for tabless columns (Applied), returns null.
+ */
+function getColumnTab(columnName) {
+  const tabs = COLUMN_TABS[columnName] || [];
+  if (!tabs.length) return null;
+  return state.columnTabs && state.columnTabs[columnName]
+    ? state.columnTabs[columnName]
+    : tabs[0];  // Default to "All"
+}
+
+/**
+ * Sets the active tab for a column and re-renders. Persists on state
+ * (not in localStorage — fresh session = fresh tabs is fine).
+ */
+function setColumnTab(columnName, tab) {
+  if (!state.columnTabs) state.columnTabs = {};
+  state.columnTabs[columnName] = tab;
+  render();
+}
+
+/**
+ * Date-bucket classification for a card. Uses the most recent meaningful
+ * activity date for the card in its current column:
+ *   - Applied column → applicationDate
+ *   - Engagement column → stageEnteredAt (when they moved to interviewing etc)
+ *   - Potential column → dateAdded (when first sourced/analysed)
+ *
+ * Returns "today", "last7", or "older". Null dates count as "older"
+ * since we can't date them accurately.
+ */
+function cardDateBucket(row, columnName) {
+  let date;
+  if (columnName === 'Applied') date = row.applicationDate;
+  else if (columnName === 'Engagement') date = row.stageEnteredAt || row.applicationDate;
+  else date = row.dateAdded || row.stageEnteredAt;
+
+  const days = daysSince(date);
+  if (days === null) return 'older';
+  if (days === 0) return 'today';
+  if (days <= 7) return 'last7';
+  return 'older';
+}
+
+/**
+ * Partitions an array of cards into date buckets. Returns an object
+ * with arrays keyed by bucket name, each sorted oldest-first internally
+ * (per user request — oldest first within each bucket).
+ */
+function bucketCardsByDate(cards, columnName) {
+  const buckets = { today: [], last7: [], older: [] };
+  cards.forEach(function (r) {
+    buckets[cardDateBucket(r, columnName)].push(r);
+  });
+  // Sort oldest first within each bucket. Uses whichever date cardDateBucket
+  // used — same logic inline here for consistency.
+  const getDate = function (r) {
+    if (columnName === 'Applied') return r.applicationDate;
+    if (columnName === 'Engagement') return r.stageEnteredAt || r.applicationDate;
+    return r.dateAdded || r.stageEnteredAt;
+  };
+  Object.keys(buckets).forEach(function (b) {
+    buckets[b].sort(function (a, b2) {
+      const da = new Date(getDate(a) || 0).getTime();
+      const db = new Date(getDate(b2) || 0).getTime();
+      return da - db;  // ascending = oldest first
+    });
+  });
+  return buckets;
+}
+
+/**
+ * Renders a date-bucketed list of cards with "Today" / "Last 7 days" /
+ * "Older" dividers. Only renders a bucket's divider if there are cards
+ * in it. If total cards ≤ 5 across all buckets, skips dividers entirely
+ * and just renders cards flat — small lists don't benefit from structure.
+ */
+function renderDateBuckets(cards, columnName) {
+  if (!cards.length) return '';
+
+  // Threshold: below this, no dividers. Keeps small lists clean.
+  if (cards.length <= 5) return cards.map(renderCard).join('');
+
+  const buckets = bucketCardsByDate(cards, columnName);
+  const labels = { today: 'Today', last7: 'Last 7 days', older: 'Older' };
+  const order = ['today', 'last7', 'older'];
+
+  return order.map(function (b) {
+    if (!buckets[b].length) return '';
+    return (
+      '<div class="date-divider">' +
+        '<span class="date-divider-line"></span>' +
+        '<span class="date-divider-label">' + labels[b] + ' · ' + buckets[b].length + '</span>' +
+        '<span class="date-divider-line"></span>' +
+      '</div>' +
+      buckets[b].map(renderCard).join('')
+    );
+  }).join('');
+}
+
+function renderColumn(columnStatus) {
+  const groups = groupByColumn();
+  const group = groups[columnStatus] || { active: [], holding: [] };
+  const total = group.active.length + group.holding.length;
+
+  const holdingHidden = state.holdingCollapsed[columnStatus];
+  const holdingHtml = group.holding.length
+    ? (
+        '<div class="holding-divider" onclick="toggleHolding(\'' + columnStatus + '\')">' +
+          '<span class="holding-divider-line"></span>' +
+          '<span class="holding-divider-label">' + (holdingHidden ? '▸' : '▾') + ' Holding ' + group.holding.length + '</span>' +
+          '<span class="holding-divider-line"></span>' +
+        '</div>' +
+        (holdingHidden ? '' : group.holding.map(renderCard).join(''))
+      )
+    : '';
+
+  const tabs = COLUMN_TABS[columnStatus] || [];
+  const hasTabs = tabs.length > 0;
+  const activeTab = getColumnTab(columnStatus);
+
+  // Filter active cards based on the selected tab. Applied uses age-based
+  // buckets; other columns use status-based filtering.
+  let tabCards = group.active;
+  if (hasTabs && activeTab !== 'All') {
+    if (columnStatus === 'Applied') {
+      const range = APPLIED_TAB_THRESHOLDS[activeTab];
+      if (range) {
+        tabCards = group.active.filter(function (r) {
+          const days = daysSince(r.applicationDate);
+          if (days === null) return activeTab === 'Ghosted';  // missing date → treat as ghosted
+          return days >= range.min && days <= range.max;
+        });
       }
     } else {
-      // POST path
-      const body = request.body || {};
-      const action = body.action || '';
-      switch (action) {
-        case 'addToQueue':            result = addToQueue(body); break;
-        case 'removeFromQueue':       result = removeFromQueue(body); break;
-        case 'clearQueue':            result = clearQueue(); break;
-        case 'batchAppendAnalysed':   result = batchAppendAnalysed(body); break;
-        case 'savePhase1Docs':        result = savePhase1Docs(body); break;
-        case 'markAsApplied':         result = markAsApplied(body); break;
-        case 'saveInterviewPrep':     result = saveInterviewPrep(body); break;
-        case 'updateRoundScore':      result = updateRoundScore(body); break;
-        case 'updateCardStatus':      result = updateCardStatus(body); break;
-        case 'savePersonalAngle':     result = savePersonalAngle(body); break;
-        case 'saveNote':              result = saveNote(body); break;
-        case 'updateNote':            result = updateNote(body); break;
-        case 'deleteNote':            result = deleteNote(body); break;
-        case 'saveAdContent':         result = saveAdContent(body); break;
-        case 'saveStatusHistory':     result = saveStatusHistory(body); break;
-        case 'batchUpdateJourney':    result = batchUpdateJourney(body); break;
-        case 'appendAnalysedJob':     result = appendAnalysedJob(body); break;
-        case 'batchSaveAnalyse':      result = batchSaveAnalyse(body); break;
-        case 'batchSaveGenerateDocs': result = batchSaveGenerateDocs(body); break;
-        case 'batchSaveInterviewPrep':result = batchSaveInterviewPrep(body); break;
-        default:                      result = { ok: false, error: 'Unknown POST action: ' + action };
-      }
+      tabCards = group.active.filter(function (r) { return r.status === activeTab; });
     }
+  }
 
-    // Stringify to sidestep google.script.run\'s brittle object serialiser.
-    // Date objects, nested undefined values, and certain shapes cause it
-    // to silently return null on the client. JSON strings pass through
-    // cleanly every time.
-    return JSON.stringify(result);
-  } catch (err) {
-    return JSON.stringify({ ok: false, error: String(err && err.message ? err.message : err) });
+  let activeHtml;
+  if (tabCards.length === 0 && group.holding.length === 0) {
+    activeHtml = '<div class="column-empty">No jobs here</div>';
+  } else if (columnStatus === 'Applied' && activeTab === 'All') {
+    // Applied All tab: render as three age-bucket sections, each with a
+    // tinted wash matching its urgency colour (green=recent, amber=follow
+    // up, red=ghosted). Skips empty buckets.
+    const buckets = ['Recent', 'Follow up', 'Ghosted'];
+    const sections = buckets.map(function (bucketName) {
+      const range = APPLIED_TAB_THRESHOLDS[bucketName];
+      const cards = group.active.filter(function (r) {
+        const days = daysSince(r.applicationDate);
+        if (days === null) return bucketName === 'Ghosted';
+        return days >= range.min && days <= range.max;
+      });
+      return { bucket: bucketName, cards: cards };
+    }).filter(function (s) { return s.cards.length > 0; });
+
+    activeHtml = sections.map(function (s) {
+      const slug = 'applied-bucket-' + s.bucket.toLowerCase().replace(/\s+/g, '-');
+      const meta = {
+        'Recent':    { pill: 'pill-green',  icon: '◉', subtitle: '<7 days — sit tight' },
+        'Follow up': { pill: 'pill-amber',  icon: '⏰', subtitle: '7-21 days — consider reaching out' },
+        'Ghosted':   { pill: 'pill-red',    icon: '◌', subtitle: '>21 days — probably over' }
+      }[s.bucket];
+      const divider =
+        '<div class="substatus-divider">' +
+          '<span class="substatus-divider-line"></span>' +
+          '<span class="substatus-divider-label pill ' + meta.pill + '">' +
+            '<span class="icon">' + meta.icon + '</span> ' + s.bucket + ' · ' + s.cards.length +
+          '</span>' +
+          '<span class="substatus-divider-line"></span>' +
+        '</div>';
+      // Sort oldest first within bucket
+      s.cards.sort(function (a, b) {
+        const da = new Date(a.applicationDate || 0).getTime();
+        const db = new Date(b.applicationDate || 0).getTime();
+        return da - db;
+      });
+      return (
+        '<div class="substatus-section ' + slug + '">' +
+          divider +
+          s.cards.map(renderCard).join('') +
+        '</div>'
+      );
+    }).join('');
+
+    if (!activeHtml) activeHtml = '<div class="column-empty">No jobs here</div>';
+  } else if (!hasTabs) {
+    // No tabs (defensive — shouldn\'t happen now Applied has tabs too)
+    activeHtml = renderDateBuckets(tabCards, columnStatus);
+  } else if (activeTab === 'All') {
+    // All tab (Potential/Engagement): status sections with date dividers inside
+    const sectionOrder = STATUS_SECTION_ORDER[columnStatus] || [];
+    const sections = sectionOrder.map(function (status) {
+      const cards = tabCards.filter(function (r) { return r.status === status; });
+      return { status: status, cards: cards };
+    }).filter(function (s) { return s.cards.length > 0; });
+
+    activeHtml = sections.map(function (s) {
+      const info = getStatusInfo(s.status);
+      const sectionSlug = 'substatus-section-' + s.status.toLowerCase().replace(/\s+/g, '-');
+      // Analysed is the baseline "pre-application" state — its divider
+      // adds noise without value (most Potential cards are Analysed).
+      // Sourced and Ready to Apply genuinely differentiate. Skip divider
+      // for Analysed but keep the section wrapper so the tint still applies.
+      const divider = s.status === 'Analysed'
+        ? ''
+        : '<div class="substatus-divider">' +
+            '<span class="substatus-divider-line"></span>' +
+            '<span class="substatus-divider-label pill-status ' + info.cls + '">' +
+              '<span class="icon">' + info.icon + '</span>' + s.status + ' · ' + s.cards.length +
+            '</span>' +
+            '<span class="substatus-divider-line"></span>' +
+          '</div>';
+      return (
+        '<div class="substatus-section ' + sectionSlug + '">' +
+          divider +
+          renderDateBuckets(s.cards, columnStatus) +
+        '</div>'
+      );
+    }).join('');
+
+    if (!activeHtml) activeHtml = '<div class="column-empty">No jobs here</div>';
+  } else {
+    // Single-status or single-bucket tab: flat date dividers only
+    activeHtml = renderDateBuckets(tabCards, columnStatus);
+  }
+
+  // Column slug for lane tinting. "Ready to Apply" → "column-ready-to-apply".
+  const columnSlug = 'column-' + columnStatus.toLowerCase().replace(/\s+/g, '-');
+
+  // Tab bar markup (only for columns that have tabs)
+  let tabBarHtml = '';
+  if (hasTabs) {
+    tabBarHtml = '<div class="column-tabs">' +
+      tabs.map(function (t) {
+        const cls = t === activeTab ? 'column-tab active' : 'column-tab';
+        // Count how many cards match this tab for a subtle number badge.
+        // Applied uses age-bucket matching; other columns use status matching.
+        let n;
+        if (t === 'All') {
+          n = group.active.length;
+        } else if (columnStatus === 'Applied') {
+          const range = APPLIED_TAB_THRESHOLDS[t];
+          n = range
+            ? group.active.filter(function (r) {
+                const days = daysSince(r.applicationDate);
+                if (days === null) return t === 'Ghosted';
+                return days >= range.min && days <= range.max;
+              }).length
+            : 0;
+        } else {
+          n = group.active.filter(function (r) { return r.status === t; }).length;
+        }
+        return (
+          '<button class="' + cls + '" onclick="setColumnTab(\'' + columnStatus + '\', \'' + t + '\')">' +
+            '<span class="column-tab-label">' + t + '</span>' +
+            (n > 0 ? '<span class="column-tab-count">' + n + '</span>' : '') +
+          '</button>'
+        );
+      }).join('') +
+    '</div>';
+  }
+
+  // Column tint class: All tab gets the base lane tint (defined in CSS
+  // by column-{name}). Single-tab active gets a stronger wash matching
+  // the status/bucket colour. Applied age-buckets map to green/amber/red.
+  let columnTintClass = '';
+  if (hasTabs && activeTab && activeTab !== 'All') {
+    if (columnStatus === 'Applied') {
+      // Map age bucket to colour class: Recent=green, Follow up=amber, Ghosted=red
+      const appliedTint = {
+        'Recent':    'column-tint-recent',
+        'Follow up': 'column-tint-followup',
+        'Ghosted':   'column-tint-ghosted'
+      }[activeTab];
+      if (appliedTint) columnTintClass = ' ' + appliedTint;
+    } else {
+      columnTintClass = ' column-tint-' + activeTab.toLowerCase().replace(/\s+/g, '-');
+    }
+  }
+
+  return (
+    '<div class="column ' + columnSlug + columnTintClass + '">' +
+      '<div class="column-header">' +
+        '<div class="column-title-row">' +
+          '<span class="column-stage-bar"></span>' +
+          '<span class="column-title">' + columnLabel(columnStatus) + '</span>' +
+          '<span class="column-count">' + total + '</span>' +
+        '</div>' +
+        renderSortDropdown(columnStatus) +
+      '</div>' +
+      tabBarHtml +
+      '<div class="column-cards">' +
+        activeHtml +
+        holdingHtml +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function renderSortDropdown(column) {
+  const value = state.sortBy[column] || 'score-desc';
+  const opts = [
+    ['score-desc', 'Fit ↓'],
+    ['score-asc',  'Fit ↑'],
+    ['recent',     'Recent'],
+    ['oldest',     'Oldest'],
+    ['company',    'A–Z']
+  ];
+  const currentLabel = (opts.find(function (o) { return o[0] === value; }) || opts[0])[1];
+  const openKey = state.sortMenuOpenFor === column;
+  return (
+    '<div class="sort-menu">' +
+      '<button class="sort-icon-btn" onclick="toggleSortMenu(\'' + column + '\',event)" title="Sort: ' + currentLabel + '" aria-haspopup="true" aria-expanded="' + (openKey ? 'true' : 'false') + '">' +
+        '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h13M3 12h9M3 18h5M17 8l4-4 4 4M21 4v16"/></svg>' +
+      '</button>' +
+      (openKey
+        ? '<div class="sort-menu-dropdown">' +
+            opts.map(function (o) {
+              const cls = 'sort-menu-item' + (value === o[0] ? ' active' : '');
+              return '<button class="' + cls + '" onclick="setSortAndClose(\'' + column + '\',\'' + o[0] + '\')">' + o[1] + '</button>';
+            }).join('') +
+          '</div>'
+        : '') +
+    '</div>'
+  );
+}
+
+function toggleSortMenu(column, ev) {
+  if (ev && ev.stopPropagation) ev.stopPropagation();
+  state.sortMenuOpenFor = state.sortMenuOpenFor === column ? null : column;
+  render();
+  if (state.sortMenuOpenFor) {
+    setTimeout(function () {
+      document.addEventListener('click', closeSortMenuOnce, { once: true });
+    }, 0);
   }
 }
-
-
-// ============================================================
-// PIPELINE READS
-// ============================================================
-
-function getPipeline() {
-  const sheet = openPipeline();
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { ok: true, rows: [] };
-  const values = sheet.getRange(2, 1, lastRow - 1, TOTAL_COLS).getValues();
-  const rows = values.map(function (r, i) { return rowToObject(r, i + 2); });
-  return { ok: true, rows: rows };
+function closeSortMenuOnce() {
+  state.sortMenuOpenFor = null;
+  render();
+}
+function setSortAndClose(column, value) {
+  state.sortMenuOpenFor = null;
+  setSort(column, value);
 }
 
-function getRow(rowId) {
-  if (!rowId || isNaN(rowId)) return { ok: false, error: 'Invalid rowId' };
-  const sheet = openPipeline();
-  const values = sheet.getRange(rowId, 1, 1, TOTAL_COLS).getValues()[0];
-  return { ok: true, row: rowToObject(values, rowId) };
-}
+function renderCard(row) {
+  const inBatch = !!state.batchMode;
+  const isBatchSelected = inBatch && !!state.selectedRowIds[row.rowId];
+  const isActive = state.selectedRowId === row.rowId;
+  const followUpDue = isFollowUpDue(row);
 
-function rowToObject(r, rowId) {
-  return {
-    rowId:                       rowId,
-    status:                      r[COL.STATUS - 1],
-    company:                     r[COL.COMPANY - 1],
-    role:                        r[COL.ROLE - 1],
-    fitScore:                    r[COL.FIT_SCORE - 1],
-    recommendation:              r[COL.RECOMMENDATION - 1],
-    url:                         r[COL.URL - 1],
-    keyNotes:                    r[COL.KEY_NOTES - 1],
-    companyIntel:                parseJSONSafe(r[COL.COMPANY_INTEL - 1]),
-    salary:                      r[COL.SALARY - 1],
-    salaryExpectation:           r[COL.SALARY_EXPECTATION - 1],
-    location:                    r[COL.LOCATION - 1],
-    workArrangement:             r[COL.WORK_ARRANGEMENT - 1],
-    keyAlignments:               r[COL.KEY_ALIGNMENTS - 1],
-    potentialConcerns:           r[COL.POTENTIAL_CONCERNS - 1],
-    applicationPriority:         r[COL.APPLICATION_PRIORITY - 1],
-    tailoredPitch:               r[COL.TAILORED_PITCH - 1],
-    analysisDate:                r[COL.ANALYSIS_DATE - 1],
-    culturalFit:                 r[COL.CULTURAL_FIT - 1],
-    resumeMd:                    r[COL.RESUME_MD - 1],
-    coverLetterMd:               r[COL.COVER_LETTER_MD - 1],
-    submittedResumeLink:         r[COL.SUBMITTED_RESUME_LINK - 1],
-    submittedCoverLetterLink:    r[COL.SUBMITTED_COVER_LETTER_LINK - 1],
-    interviewPrep:               parseJSONSafe(r[COL.INTERVIEW_PREP - 1]),
-    linkedinContactsLink:        r[COL.LINKEDIN_CONTACTS_LINK - 1],
-    lastActivity:                r[COL.LAST_ACTIVITY - 1],
-    yourNotes:                   r[COL.YOUR_NOTES - 1],
-    notes:                       parseNotes(r[COL.YOUR_NOTES - 1]),
-    duplicateCheck:              r[COL.DUPLICATE_CHECK - 1],
-    applicationDate:             r[COL.APPLICATION_DATE - 1],
-    applicationMethod:           r[COL.APPLICATION_METHOD - 1],
-    followUpDate:                r[COL.FOLLOW_UP_DATE - 1],
-    dateAdded:                   r[COL.DATE_ADDED - 1],
-    contactName:                 r[COL.CONTACT_NAME - 1],
-    contactEmail:                r[COL.CONTACT_EMAIL - 1],
-    contactLinkedin:             r[COL.CONTACT_LINKEDIN - 1],
-    personalAngle:               r[COL.PERSONAL_ANGLE - 1],
-    adContent:                   r[COL.AD_CONTENT - 1],
-    stageEnteredAt:              r[COL.STAGE_ENTERED_AT - 1],
-    statusHistory:               parseStatusHistory(r[COL.STATUS_HISTORY - 1])
+  const classes = ['card'];
+  if (isBatchSelected) classes.push('batch-selected');
+  if (isActive) classes.push('selected');
+  if (isHoldingStatus(row.status)) classes.push('holding');
+  if (inBatch) classes.push('batch-mode');
+  if (followUpDue) classes.push('follow-up');
+
+  const eligibleStatuses = {
+    analyse:       ['Sourced', 'Analysed', 'Rethink', 'Unsure'],
+    generateDocs:  ['Analysed'],
+    interviewPrep: ['Applied', 'Interviewing', 'Interviewed', 'Offer', 'Accepted']
   };
+  // Update journey is universal — backdating works for any card regardless
+  // of its current status, since the merge logic respects existing entries.
+  const isEligible = !inBatch
+    || state.batchMode === 'updateJourney'
+    || (eligibleStatuses[state.batchMode] || []).indexOf(row.status) > -1;
+  if (inBatch && !isEligible) classes.push('batch-ineligible');
+
+  // Staleness class drives the card\'s left-edge border colour.
+  classes.push(cardStaleClass(row));
+
+  // Card fit circle: storage is 0–100 but the circle shows 0–10 display form.
+  const fitDisplay = displayFitScore(row.fitScore);
+  const fitTooltip = buildFitScoreTooltip(row);
+  const fitBadge = fitDisplay
+    ? '<div class="fit-circle ' + fitClass(row.fitScore) + '" title="' + escapeAttr(fitTooltip) + '">' + fitDisplay + '</div>'
+    : '<div class="fit-circle" title="' + escapeAttr(fitTooltip) + '" style="border-color:var(--border-strong);color:var(--text-ter);background:var(--bg-secondary);">·</div>';
+
+  const clickHandler = inBatch
+    ? (isEligible ? 'toggleCardSelection(' + row.rowId + ')' : 'toast(\'This card is not eligible for the current batch action\', \'info\')')
+    : 'openCardDetail(' + row.rowId + ')';
+
+  // Corner ribbon in the top-right of the card. Priority-based: follow-up
+  // wins over touched-today if both apply, because follow-up is actionable
+  // ("you need to do something") while touched-today is passive ("you did
+  // something"). Only one ribbon renders at a time; most cards have none.
+  const ribbonHtml = cardRibbon(row, followUpDue);
+
+  return (
+    '<div class="' + classes.join(' ') + '" onclick="' + clickHandler + '">' +
+      ribbonHtml +
+      '<div class="card-row">' +
+        fitBadge +
+        '<div class="card-body">' +
+          '<p class="card-role">' + escapeHtml(row.role || '(Untitled role)') + '</p>' +
+          '<p class="card-company">' + escapeHtml(row.company || '(No company)') + '</p>' +
+          cardDetailsLine(row) +
+          renderCardJourney(row) +
+        '</div>' +
+      '</div>' +
+    '</div>'
+  );
 }
 
 /**
- * Parses the Your Notes (col Z) cell into an array of { ts, text } entries.
- * Shapes supported:
- *   - JSON array of { ts, text }  (current format)
- *   - Plain text                  (legacy — treated as a single untimestamped entry)
- *   - Blank                       (returns [])
+ * Returns a folded-corner ribbon to display in the top-right of a card.
+ * Only renders when there\'s something noteworthy to signal — most cards
+ * get nothing. Priority order:
+ *   1. Needs follow-up (Applied >FOLLOW_UP_DAYS old) — amber
+ *   2. Stale in stage (Sourced/Analysed/Ready to Apply sitting too long) — slate
+ * Both are actionable. Touched-today was previously rendered as a green
+ * ribbon here but kept breaking on narrow cards (text wrapping vertically),
+ * and it duplicated info already shown in the detail modal header. Removed
+ * because it was passive ("you did something") rather than actionable.
  */
-function parseNotes(raw) {
-  if (!raw && raw !== 0) return [];
-  const s = String(raw).trim();
-  if (!s) return [];
-
-  // Attempt JSON parse; if it's a valid array, accept it
-  try {
-    const parsed = JSON.parse(s);
-    if (Array.isArray(parsed)) {
-      return parsed.filter(function (e) { return e && e.text; });
+function cardRibbon(row, followUpDue) {
+  if (followUpDue) {
+    return (
+      '<div class="card-ribbon card-ribbon-followup" title="Applied more than ' + FOLLOW_UP_DAYS + ' days ago">' +
+        '<span class="card-ribbon-icon">🔔</span>' +
+        '<span class="card-ribbon-text">Follow up</span>' +
+      '</div>'
+    );
+  }
+  // Stale-in-stage: Sourced/Analysed/Ready to Apply cards that haven\'t
+  // moved in a while. Thresholds per stage:
+  //   Sourced: >3 days (needs analysing)
+  //   Analysed: >10 days (needs docs or a decision)
+  //   Ready to Apply: >3 days (should be applied by now)
+  const staleThresholds = { 'Sourced': 3, 'Analysed': 10, 'Ready to Apply': 3 };
+  const threshold = staleThresholds[row.status];
+  if (threshold) {
+    const stageDays = daysSince(row.stageEnteredAt || row.dateAdded || row.lastActivity);
+    if (stageDays !== null && stageDays > threshold) {
+      return (
+        '<div class="card-ribbon card-ribbon-stale" title="Sitting in ' + row.status + ' for ' + stageDays + ' days">' +
+          '<span class="card-ribbon-icon">⏳</span>' +
+          '<span class="card-ribbon-text">Stale</span>' +
+        '</div>'
+      );
     }
-  } catch (e) { /* fall through */ }
-
-  // Legacy plain-text note — preserve as a single entry with no timestamp
-  return [{ ts: null, text: s, legacy: true }];
+  }
+  return '';
 }
 
 /**
- * Parses STATUS_HISTORY (col 38) into an array of { status, at } entries
- * in chronological order (oldest first). Empty/garbage returns [].
+ * Replaces the status pill on the card body with a compact factual line
+ * showing location · salary · work arrangement. Status is already visible
+ * via the section dividers (Applied column) and the journey pills below,
+ * so repeating it here was redundant.
+ *
+ * Any missing field is skipped silently — a card with no salary just shows
+ * location · arrangement. If all three are blank, the whole line is hidden.
  */
-function parseStatusHistory(raw) {
-  if (!raw && raw !== 0) return [];
-  const s = String(raw).trim();
-  if (!s) return [];
-  try {
-    const parsed = JSON.parse(s);
-    if (Array.isArray(parsed)) {
-      return parsed
-        .filter(function (e) { return e && e.status; })
-        .map(function (e) { return { status: e.status, at: e.at || null }; });
-    }
-  } catch (e) { /* fall through */ }
-  return [];
+/**
+ * Returns true if a value is meaningfully present — not just truthy, but
+ * not one of the common "empty" placeholder strings the analyse prompt
+ * sometimes returns when a job ad doesn\'t state a field. Things like
+ * "Not specified", "Not stated", "TBD", "—" etc. clutter the cards
+ * without adding information, so we treat them as absent.
+ */
+function isPresent(val) {
+  if (val === null || val === undefined) return false;
+  const s = String(val).trim();
+  if (!s) return false;
+  const blank = /^(not\s+(specified|stated|provided|disclosed|listed|mentioned|available)|n\/a|na|tbd|tba|unknown|unclear|none|nil|—|-|\.)$/i;
+  return !blank.test(s);
 }
 
+function cardDetailsLine(row) {
+  const parts = [];
+  if (isPresent(row.location))        parts.push(escapeHtml(row.location));
+  if (isPresent(row.salary))          parts.push(escapeHtml(row.salary));
+  if (isPresent(row.workArrangement)) parts.push(escapeHtml(row.workArrangement));
+  if (!parts.length) {
+    // Nothing useful to show. Skip the line entirely — no empty-state
+    // prompt, no "Not specified", no clutter. The company and role tell
+    // Louie what he needs to decide whether to click in.
+    return '';
+  }
+  return '<p class="card-details">' + parts.join(' <span class="card-details-sep">·</span> ') + '</p>';
+}
 
-// ============================================================
-// QUEUE MANAGEMENT
-// ============================================================
+/**
+ * Stacked mini-pill list of status history on the card itself — only for
+ * cards that have been through Applied or later. Shows every earlier
+ * status in order (oldest first) so you can see the full journey at a
+ * glance without opening the modal. Current status is NOT repeated here
+ * (it's the big pill above). If there's no history or only one entry
+ * (the current one), renders nothing.
+ */
+function renderCardJourney(row) {
+  if (!hasBeenApplied(row)) return '';
+  const history = Array.isArray(row.statusHistory) ? row.statusHistory : [];
+  if (history.length < 2) return '';
 
-function getQueue() {
-  const sheet = openQueue();
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { ok: true, items: [] };
-  const values = sheet.getRange(2, 1, lastRow - 1, 4).getValues();
-  const items = values
-    .filter(function (r) { return r[0]; })
-    .map(function (r) {
-      const url = String(r[1] || '');
-      return {
-        id:       String(r[0]),
-        url:      url,
-        content:  String(r[2] || ''),
-        addedAt:  r[3],
-        source:   detectSource(url)
-      };
+  // Drop the final entry if it matches the current status — we don't want
+  // to repeat what the main pill already shows.
+  const priorFull = history[history.length - 1].status === row.status
+    ? history.slice(0, -1)
+    : history.slice();
+
+  // For cards in the Applied column, pre-Applied stages (Analysed, Ready
+  // to Apply) are noise on the card itself — every Applied card has been
+  // through them, so showing them adds no information. Keep only Applied
+  // and later substages so the journey pills are meaningful at a glance.
+  // Full journey including Analysed is still visible in the detail modal.
+  const CARD_JOURNEY_BLACKLIST = ['Sourced', 'Analysed', 'Ready to Apply', 'Generate Docs'];
+  const prior = priorFull.filter(function (h) {
+    return CARD_JOURNEY_BLACKLIST.indexOf(h.status) === -1;
+  });
+
+  if (!prior.length) return '';
+
+  return (
+    '<div class="card-journey">' +
+      prior.map(function (h) {
+        const info = getStatusInfo(h.status);
+        return '<span class="pill-status ' + info.cls + '"><span class="icon">' + info.icon + '</span>' + escapeHtml(h.status) + '</span>';
+      }).join('') +
+    '</div>'
+  );
+}
+
+function cardStatusPill(row) {
+  const info = getStatusInfo(row.status);
+  return '<span class="pill-status ' + info.cls + '"><span class="icon">' + info.icon + '</span>' + escapeHtml(row.status) + '</span>';
+}
+function cardPills(row) { return cardStatusPill(row); }
+
+/**
+ * Stale warning pill — only rendered when a card has crossed the warming
+ * or cold threshold for its status type. Fresh cards show nothing,
+ * which is the overwhelming common case. Pill sits in the top-right
+ * corner of the card, amber for warming, red for cold. The number is
+ * the age in the current stage.
+ *
+ * Thresholds vary by stage: Analysed / Ready to Apply cards should move
+ * quickly (3/7/14 days) so they go amber faster. Applied+ cards can
+ * reasonably sit for longer (7/21/45 days) because they're waiting on
+ * someone else to respond.
+ */
+/**
+ * Returns a class name driving the card\'s left-edge border colour, based
+ * on how long the card has been in its current stage. Fresh cards get a
+ * subtle neutral edge; warming/cold get amber/red. This is a passive
+ * visual signal — no numbers, no pills. The border stripe lives at the
+ * card\'s left edge via .card::before and reads as a temperature gauge.
+ *
+ * Note the distinct `card-stale-*` prefix — the `stale-*` class family
+ * is already in use for colouring TEXT (stage-age labels in earlier
+ * versions). Reusing those classes on the card would cascade their
+ * text colours onto everything inside the card.
+ */
+function cardStaleClass(row) {
+  const quickStages = ['Analysed', 'Ready to Apply'];
+  const isQuick = quickStages.indexOf(row.status) > -1;
+  const thresholds = isQuick
+    ? { fresh: 3, warming: 7, cold: 14 }
+    : { fresh: 7, warming: 21, cold: 45 };
+
+  const stageAge = daysSince(row.stageEnteredAt);
+  if (stageAge === null) return 'card-stale-none';
+  if (stageAge < thresholds.fresh)   return 'card-stale-fresh';
+  if (stageAge < thresholds.warming) return 'card-stale-mild';
+  if (stageAge < thresholds.cold)    return 'card-stale-warming';
+  return 'card-stale-cold';
+}
+
+function daysSince(date) {
+  if (!date) return null;
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return null;
+  if (d.getFullYear() < 2000) return null;
+  const now = new Date();
+  const a = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const b = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  return Math.max(0, Math.floor((a - b) / 86400000));
+}
+
+function formatDays(n) {
+  if (n === 0) return 'today';
+  if (n === 1) return '1 day';
+  if (n < 30) return n + ' days';
+  const w = Math.floor(n / 7);
+  if (w < 8) return w + ' weeks';
+  const m = Math.floor(n / 30);
+  return m + ' months';
+}
+
+function stalenessClass(days, t) {
+  if (days === null) return 'stale-neutral';
+  if (days <= t.fresh)    return 'stale-fresh';
+  if (days <= t.warming)  return 'stale-warming';
+  return 'stale-cold';
+}
+
+/* ============================================================
+   ARCHIVE
+   ============================================================ */
+
+function renderArchive() {
+  // Rejected cards that made it to Interviewing/Interviewed live in
+  // Engagement, not Archive. Archive is for pre-interview rejections
+  // and withdrawals only.
+  const archived = state.pipeline.filter(function (r) {
+    if (r.status === 'Withdrawn') return true;
+    if (r.status === 'Rejected' && !rejectedReachedInterview(r)) return true;
+    return false;
+  });
+  if (!archived.length) return '';
+  const lastActivity = archived.reduce(function (acc, r) {
+    const d = r.lastActivity ? new Date(r.lastActivity).getTime() : 0;
+    return d > acc ? d : acc;
+  }, 0);
+  const lastSub = lastActivity ? 'Last: ' + timeSince(new Date(lastActivity)) : '';
+
+  const drawer =
+    '<div class="archive-drawer" onclick="toggleArchive()">' +
+      '<div class="archive-drawer-left">' +
+        '<span class="archive-drawer-label">' + (state.archiveExpanded ? '▾' : '▸') + ' Archive</span>' +
+        '<span class="archive-drawer-count">' + archived.length + '</span>' +
+        '<span class="archive-drawer-sub">rejected and withdrawn</span>' +
+      '</div>' +
+      '<span class="archive-drawer-sub">' + lastSub + '</span>' +
+    '</div>';
+
+  if (!state.archiveExpanded) return drawer;
+  return drawer + '<div class="archive-expanded">' + archived.map(renderCard).join('') + '</div>';
+}
+
+/* ============================================================
+   DETAIL BODIES
+   ============================================================ */
+
+/**
+ * Tab definitions for the unified card detail modal. Same 5 tabs render
+ * for every card stage. Each tab declares an `unlockedWhen` predicate
+ * that determines whether the user can click into it — locked tabs show
+ * a lock icon + tooltip explaining what unlocks them.
+ *
+ * Order matters: this is the rendering order left-to-right.
+ *
+ * Note: Follow-up tab will be added in Deploy B once the schema and tab
+ * body exist. For now: Intelligence | Docs | Submitted docs | Interview prep | Notes.
+ */
+const DETAIL_TABS = [
+  {
+    id: 'intelligence',
+    label: 'Intelligence',
+    unlockedWhen: function () { return true; },
+    lockReason: ''
+  },
+  {
+    id: 'docs',
+    label: 'Docs',
+    unlockedWhen: function (row) {
+      // Docs available from Analysed onward — pre-Analysed (Sourced) shouldn\'t generate docs yet
+      return row.status !== 'Sourced';
+    },
+    lockReason: 'Available after the card is analysed'
+  },
+  {
+    id: 'submittedDocs',
+    label: 'Submitted docs',
+    unlockedWhen: function (row) {
+      // Submitted docs only meaningful once you\'ve actually applied
+      return hasBeenApplied(row);
+    },
+    lockReason: 'Available after you mark this card as Applied'
+  },
+  {
+    id: 'interviewPrep',
+    label: 'Interview prep',
+    unlockedWhen: function (row) {
+      return hasBeenApplied(row);
+    },
+    lockReason: 'Available after you mark this card as Applied'
+  },
+  {
+    id: 'notes',
+    label: 'Notes',
+    unlockedWhen: function () { return true; },
+    lockReason: ''
+  }
+];
+
+/**
+ * Pick the default tab to show when a card detail modal first opens.
+ * Implements the "next-action" routing logic from the plan: each stage
+ * gets pointed at the tab that represents the next thing to do.
+ */
+function getDefaultTabForRow(row) {
+  // Card already has a selected tab? Honour it (user navigated there)
+  if (state.selectedTab) {
+    // But ONLY if it\'s unlocked for this card — otherwise fall through to default
+    const tab = DETAIL_TABS.find(function (t) { return t.id === state.selectedTab; });
+    if (tab && tab.unlockedWhen(row)) return state.selectedTab;
+  }
+
+  const status = row.status;
+  if (status === 'Sourced')                                            return 'intelligence';
+  if (status === 'Analysed')                                           return 'docs';
+  if (status === 'Ready to Apply')                                     return 'docs';
+
+  // Applied: split by age bucket (recent vs follow-up due vs ghosted)
+  if (status === 'Applied') {
+    const days = daysSince(row.applicationDate);
+    // Follow-up tab will live here in Deploy B; for now point at Interview prep
+    // for recent and Notes for ghosted (so user can record a lesson learned)
+    if (days !== null && days > 21) return 'notes';
+    return 'interviewPrep';
+  }
+
+  if (['Interviewing', 'Interviewed', 'Offer'].indexOf(status) > -1) return 'interviewPrep';
+  if (['Accepted', 'Rejected', 'Withdrawn'].indexOf(status) > -1)    return 'notes';
+  if (isHoldingStatus(status))                                      return 'intelligence';
+
+  return 'intelligence';
+}
+
+/**
+ * Render the unified 5-tab bar. Locked tabs are visually muted with a
+ * lock glyph and don\'t respond to clicks (instead show a toast on tap
+ * for mobile users who can\'t hover for the tooltip).
+ */
+function renderUnifiedTabBar(row, activeTab) {
+  return '<div class="tabs">' +
+    DETAIL_TABS.map(function (t) {
+      const unlocked = t.unlockedWhen(row);
+      const isActive = unlocked && t.id === activeTab;
+      const cls = 'tab' + (isActive ? ' active' : '') + (unlocked ? '' : ' locked');
+      const handler = unlocked
+        ? 'setTab(\'' + t.id + '\')'
+        : 'showLockedTabReason(\'' + escapeAttr(t.lockReason) + '\')';
+      const lockGlyph = unlocked ? '' : ' <span class="tab-lock" aria-hidden="true">🔒</span>';
+      const titleAttr = unlocked ? '' : ' title="' + escapeAttr(t.lockReason) + '"';
+      return '<button class="' + cls + '"' + titleAttr + ' onclick="' + handler + '">' + t.label + lockGlyph + '</button>';
+    }).join('') +
+  '</div>';
+}
+
+function showLockedTabReason(reason) {
+  toast(reason || 'This tab is locked', 'info');
+}
+
+/**
+ * Render the body for whichever tab is active. Centralised dispatch so
+ * each stage doesn\'t need its own switch statement.
+ */
+function renderTabBody(row, tab) {
+  switch (tab) {
+    case 'intelligence':  return renderIntelligenceTabBody(row);
+    case 'docs':          return renderDocsTabBody(row);
+    case 'submittedDocs': return renderSubmittedDocsTabBody(row);
+    case 'interviewPrep': return renderInterviewPrepTabBody(row);
+    case 'notes':         return renderNotesTabBody(row);
+    default:              return renderIntelligenceTabBody(row);
+  }
+}
+
+function renderStage1DetailBody(row) {
+  const tab = getDefaultTabForRow(row);
+  return (
+    '<div class="detail-modal-header">' +
+      renderDetailHeader(row, 'Analysed', 'pill-grey') +
+    '</div>' +
+    '<div class="modal-body">' +
+      renderStatusTimeline(row) +
+      renderUnifiedTabBar(row, tab) +
+      renderTabBody(row, tab) +
+    '</div>' +
+    '<div class="modal-footer">' +
+      renderStage1ActionsInner(row, tab) +
+    '</div>'
+  );
+}
+
+function renderStage2DetailBody(row) {
+  const tab = getDefaultTabForRow(row);
+  return (
+    '<div class="detail-modal-header">' +
+      renderDetailHeader(row, 'Ready to apply', 'pill-teal') +
+    '</div>' +
+    '<div class="modal-body">' +
+      renderStatusTimeline(row) +
+      renderUnifiedTabBar(row, tab) +
+      renderTabBody(row, tab) +
+    '</div>' +
+    '<div class="modal-footer">' +
+      renderStage2ActionsInner(row, tab) +
+    '</div>'
+  );
+}
+
+function renderStage3DetailBody(row) {
+  const tab = state.selectedTab || 'interviewPrep';
+  const tabBar =
+    '<div class="tabs">' +
+      '<button class="tab ' + (tab === 'interviewPrep' ? 'active' : '') + '" onclick="setTab(\'interviewPrep\')">Interview prep</button>' +
+      '<button class="tab ' + (tab === 'intelligence' ? 'active' : '') + '" onclick="setTab(\'intelligence\')">Intelligence</button>' +
+      '<button class="tab ' + (tab === 'docs' ? 'active' : '') + '" onclick="setTab(\'docs\')">Docs</button>' +
+      '<button class="tab ' + (tab === 'notes' ? 'active' : '') + '" onclick="setTab(\'notes\')">Notes</button>' +
+    '</div>';
+
+  let tabBody;
+  if (tab === 'intelligence')       tabBody = renderIntelligenceTabBody(row);
+  else if (tab === 'docs')          tabBody = renderDocsTabBody(row);
+  else if (tab === 'submittedDocs') tabBody = renderDocsTabBody(row); // back-compat: legacy tab name routes to combined Docs
+  else if (tab === 'notes')         tabBody = renderNotesTabBody(row);
+  else                              tabBody = renderInterviewPrepTabBody(row);
+  return (
+    '<div class="detail-modal-header">' +
+      renderStage3Header(row) +
+    '</div>' +
+    '<div class="modal-body">' +
+      renderStatusTimeline(row) +
+      renderUnifiedTabBar(row, tab) +
+      renderTabBody(row, tab) +
+    '</div>' +
+    '<div class="modal-footer">' +
+      renderStage3ActionsInner(row, tab) +
+    '</div>'
+  );
+}
+
+function renderDetailHeader(row, pillText, pillClass) {
+  // Detail modal header fit circle: display scale (0–10) from stored 0–100.
+  const fitDisplay = displayFitScore(row.fitScore);
+  const salaryStr = isPresent(row.salary) ? ' · ' + escapeHtml(row.salary) : '';
+  const locStr = isPresent(row.location) ? ' · ' + escapeHtml(row.location) : '';
+  const statusInfo = getStatusInfo(row.status);
+  return (
+    '<div class="detail-header-info">' +
+      '<div class="detail-header-pills"><span class="pill-status ' + statusInfo.cls + '"><span class="icon">' + statusInfo.icon + '</span>' + escapeHtml(row.status) + '</span></div>' +
+      '<h2 class="detail-role">' + escapeHtml(row.role || '') + '</h2>' +
+      '<p class="detail-meta">' + escapeHtml(row.company || '') + locStr + salaryStr + '</p>' +
+      renderDetailDatesRow(row) +
+    '</div>' +
+    (fitDisplay ?
+      '<div class="detail-header-fit"><span class="fit-circle lg ' + fitClass(row.fitScore) + '" title="' + escapeAttr(buildFitScoreTooltip(row)) + '">' + fitDisplay + '</span><p class="detail-fit-label">fit score</p></div>'
+      : '') +
+    '<button class="modal-close" onclick="closeModal()" aria-label="Close">✕</button>'
+  );
+}
+
+function renderDetailDatesRow(row) {
+  const added   = daysSince(row.dateAdded);
+  const inStage = daysSince(row.stageEnteredAt);
+  const touched = daysSince(row.lastActivity);
+  const parts = [];
+  if (added !== null)   parts.push('<span>Added ' + formatDays(added) + ' ago</span>');
+  if (inStage !== null) parts.push('<span>In stage ' + formatDays(inStage) + '</span>');
+  if (touched !== null && touched !== inStage) parts.push('<span>Touched ' + formatDays(touched) + ' ago</span>');
+  if (!parts.length) return '';
+  return '<p class="detail-dates">' + parts.join(' <span style="color:var(--border-strong);">·</span> ') + '</p>';
+}
+
+function renderStage3Header(row) {
+  // Stage 3 header uses the same display-normalised fit as other detail headers.
+  const fitDisplay = displayFitScore(row.fitScore);
+  const statusInfo = getStatusInfo(row.status);
+  const appliedRel = timeSince(row.applicationDate);
+  const appliedWhen = appliedRel ? 'Applied ' + appliedRel : 'Applied';
+  return (
+    '<div class="detail-header-info">' +
+      '<div class="detail-header-pills">' +
+        '<span class="pill-status ' + statusInfo.cls + '"><span class="icon">' + statusInfo.icon + '</span>' + escapeHtml(row.status) + '</span>' +
+      '</div>' +
+      '<h2 class="detail-role">' + escapeHtml(row.role || '') + '</h2>' +
+      '<p class="detail-meta">' + escapeHtml(row.company || '') + (isPresent(row.location) ? ' · ' + escapeHtml(row.location) : '') + ' · ' + appliedWhen + '</p>' +
+      renderDetailDatesRow(row) +
+    '</div>' +
+    (fitDisplay ?
+      '<div class="detail-header-fit"><span class="fit-circle lg ' + fitClass(row.fitScore) + '" title="' + escapeAttr(buildFitScoreTooltip(row)) + '">' + fitDisplay + '</span><p class="detail-fit-label">fit score</p></div>'
+      : '') +
+    '<button class="modal-close" onclick="closeModal()" aria-label="Close">✕</button>'
+  );
+}
+
+function renderIntelligenceTabBody(row) {
+  return (
+    '<p class="section-title">Company intel</p>' +
+    renderCompanyIntel(row) +
+    renderMarketingInsights(row) +
+    renderYourAnglesAccordion(row)
+  );
+}
+
+/* ============================================================
+   NOTES TAB
+   ============================================================ */
+
+/**
+ * Notes tab: quick-input at top, append-only log below.
+ * Notes are stored as a JSON array in col Z (YOUR_NOTES), newest-first.
+ * Legacy plain-text notes are preserved as a single entry with legacy: true.
+ */
+function renderNotesTabBody(row) {
+  const notes = Array.isArray(row.notes) ? row.notes : [];
+
+  const compose = (
+    '<div class="notes-compose">' +
+      '<textarea id="note-input-' + row.rowId + '" placeholder="Add a note… (recruiter chat, interview detail, follow-up plan, anything worth remembering)"></textarea>' +
+      '<div class="notes-compose-row">' +
+        '<span class="notes-compose-hint">Notes are timestamped and kept forever. Newest appears on top.</span>' +
+        '<button class="accent small" onclick="handleSaveNote(' + row.rowId + ')">Save note</button>' +
+      '</div>' +
+    '</div>'
+  );
+
+  let log;
+  if (!notes.length) {
+    log = '<div class="notes-empty">No notes yet.</div>';
+  } else {
+    log = '<div class="notes-log">' +
+      notes.map(function (n, idx) {
+        const isLegacy = !!n.legacy || !n.ts;
+        const tsLine = isLegacy
+          ? 'Legacy note'
+          : formatNoteTimestamp(n.ts);
+        const relLine = isLegacy
+          ? ''
+          : '<span class="note-entry-rel">' + timeSince(n.ts) + '</span>';
+        // Each note is click-to-edit. Clicking the text swaps it for a
+        // textarea; onblur saves and re-renders. Double-click to delete
+        // (via the × button). The note-entry-idx attr carries the index
+        // so the edit handler knows which one to update.
+        const noteKey = (isLegacy ? 'legacy-' : 'n-') + idx;
+        return (
+          '<div class="note-entry' + (isLegacy ? ' legacy' : '') + '" data-note-idx="' + idx + '">' +
+            '<div class="note-entry-header">' +
+              '<span class="note-entry-ts">' + tsLine + '</span>' +
+              relLine +
+              '<button class="note-entry-delete" onclick="handleDeleteNote(' + row.rowId + ',' + idx + ')" title="Delete note">✕</button>' +
+            '</div>' +
+            '<p class="note-entry-text" ' +
+              'onclick="startEditNote(' + row.rowId + ',' + idx + ')" ' +
+              'id="note-text-' + row.rowId + '-' + idx + '" ' +
+              'title="Click to edit">' + escapeHtml(n.text || '') + '</p>' +
+          '</div>'
+        );
+      }).join('') +
+      '</div>';
+  }
+
+  return compose + log;
+}
+
+/**
+ * Switch a note entry from read-mode to edit-mode. Replaces the <p> with
+ * a <textarea> pre-filled with current text. The textarea auto-focuses
+ * and saves on blur via handleInlineNoteEdit.
+ */
+function startEditNote(rowId, idx) {
+  const row = state.pipeline.find(function (r) { return r.rowId === rowId; });
+  if (!row) return;
+  const notes = Array.isArray(row.notes) ? row.notes : [];
+  const note = notes[idx];
+  if (!note) return;
+
+  const p = document.getElementById('note-text-' + rowId + '-' + idx);
+  if (!p) return;
+
+  // Swap for an editable textarea inside the same container
+  const current = note.text || '';
+  const textarea = document.createElement('textarea');
+  textarea.className = 'note-entry-edit';
+  textarea.value = current;
+  textarea.dataset.rowId = rowId;
+  textarea.dataset.idx = idx;
+  textarea.dataset.original = current;
+  textarea.rows = Math.max(2, Math.min(10, current.split('\n').length + 1));
+  textarea.addEventListener('blur', handleInlineNoteEdit);
+  // ESC cancels without saving
+  textarea.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      textarea.value = textarea.dataset.original;
+      textarea.dataset.cancel = '1';
+      textarea.blur();
+    }
+  });
+
+  p.parentNode.replaceChild(textarea, p);
+  textarea.focus();
+  textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+}
+
+/**
+ * Save an inline note edit when the textarea blurs. No-op if text
+ * hasn\'t changed or if cancellation was requested via ESC.
+ */
+async function handleInlineNoteEdit(e) {
+  const textarea = e.target;
+  const rowId = parseInt(textarea.dataset.rowId, 10);
+  const idx = parseInt(textarea.dataset.idx, 10);
+  const cancelled = textarea.dataset.cancel === '1';
+  const original = textarea.dataset.original || '';
+  const newText = (textarea.value || '').trim();
+
+  // No-op if cancelled or no change
+  if (cancelled || newText === original.trim()) {
+    render();  // Re-render to restore the <p> element
+    return;
+  }
+
+  // Empty text = delete the note
+  if (!newText) {
+    if (confirm('Delete this note?')) {
+      await handleDeleteNote(rowId, idx);
+      return;
+    }
+    render();
+    return;
+  }
+
+  try {
+    const res = await apiPost('updateNote', {
+      rowId: rowId,
+      idx: idx,
+      text: newText
     });
-  return { ok: true, items: items, count: items.length };
-}
-
-function addToQueue(body) {
-  const content = (body.content || '').trim();
-  const url     = (body.url || '').trim();
-  const force   = body.force === true;
-  if (!content) return { ok: false, error: 'Content is required' };
-  if (!url)     return { ok: false, error: 'URL is required' };
-
-  // Smart duplicate detection — exact URL match against both the existing
-  // pipeline AND the current queue. Returns a `duplicate` flag with details
-  // so the frontend can show a "you already have this — add anyway?" prompt.
-  // Pass force:true to bypass the check.
-  if (!force) {
-    const dup = findDuplicateByUrl(url);
-    if (dup) {
-      return {
-        ok: false,
-        duplicate: true,
-        location: dup.location,        // 'pipeline' or 'queue'
-        existing: dup.summary,         // brief blob for UI to display
-        message: 'This URL already exists in the ' + dup.location + '. Pass force:true to add anyway.'
-      };
-    }
+    if (!res.ok) throw new Error(res.error || 'Failed to update note');
+    toast('Note updated', 'success');
+    await refreshAll();
+  } catch (err) {
+    toast('Error: ' + err.message, 'error');
+    render();
   }
-
-  const sheet = openQueue();
-  const id = generateId();
-  sheet.appendRow([id, url, content, new Date()]);
-  return { ok: true, queue: getQueue().items };
 }
 
 /**
- * Find an existing pipeline row OR queue item with the same URL.
- * Returns { location, summary } if found, or null.
- *
- * Pipeline scan looks at the URL column (col F) for the last 500 rows
- * — same window as the legacy appendAnalysedJob duplicate check, balances
- * thoroughness with sheet read budget.
- *
- * Queue scan reads the whole queue (typically a handful of rows so no
- * pagination needed).
- *
- * URL comparison is case-insensitive on host but case-preserved on path,
- * since query strings on job ads are sometimes case-significant.
+ * Delete a note entry by index. Confirms first since notes are
+ * permanent otherwise.
  */
-function findDuplicateByUrl(url) {
-  if (!url) return null;
-  const target = String(url).trim().toLowerCase();
+async function handleDeleteNote(rowId, idx) {
+  if (!confirm('Delete this note permanently?')) return;
+  try {
+    const res = await apiPost('deleteNote', {
+      rowId: rowId,
+      idx: idx
+    });
+    if (!res.ok) throw new Error(res.error || 'Failed to delete note');
+    toast('Note deleted', 'success');
+    await refreshAll();
+  } catch (err) {
+    toast('Error: ' + err.message, 'error');
+  }
+}
 
-  // Check pipeline first (more authoritative — these are real cards)
-  const pipelineSheet = openPipeline();
-  const lastRow = pipelineSheet.getLastRow();
-  if (lastRow > 1) {
-    const startRow = Math.max(2, lastRow - 499);
-    const range = pipelineSheet.getRange(startRow, 1, lastRow - startRow + 1, TOTAL_COLS);
-    const values = range.getValues();
-    for (var i = 0; i < values.length; i++) {
-      const rowUrl = String(values[i][COL.URL - 1] || '').trim().toLowerCase();
-      if (rowUrl && rowUrl === target) {
-        return {
-          location: 'pipeline',
-          summary: {
-            rowId:   startRow + i,
-            company: values[i][COL.COMPANY - 1] || '',
-            role:    values[i][COL.ROLE - 1] || '',
-            status:  values[i][COL.STATUS - 1] || '',
-            dateAdded: values[i][COL.DATE_ADDED - 1] || null
-          }
-        };
-      }
-    }
+/** "23 Apr 2026 · 1:34 am" — short enough to sit beside a relative time. */
+function formatNoteTimestamp(ts) {
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return 'Unknown';
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const day   = d.getDate();
+  const mon   = months[d.getMonth()];
+  const year  = d.getFullYear();
+  let hrs     = d.getHours();
+  const mins  = String(d.getMinutes()).padStart(2, '0');
+  const ampm  = hrs >= 12 ? 'pm' : 'am';
+  hrs = hrs % 12; if (hrs === 0) hrs = 12;
+  return day + ' ' + mon + ' ' + year + ' · ' + hrs + ':' + mins + ' ' + ampm;
+}
+
+async function handleSaveNote(rowId) {
+  const el = document.getElementById('note-input-' + rowId);
+  if (!el) return;
+  const text = (el.value || '').trim();
+  if (!text) { toast('Type a note first', 'error'); return; }
+
+  try {
+    const res = await apiPost('saveNote', { rowId: rowId, noteText: text });
+    if (!res.ok) throw new Error(res.error || 'Failed to save note');
+
+    // Optimistically update state so the new note appears immediately
+    // without waiting for a full refresh round-trip.
+    const row = state.pipeline.find(function (r) { return r.rowId === rowId; });
+    if (row) row.notes = res.notes || [];
+
+    el.value = '';
+    toast('Note saved', 'success');
+    renderModal();
+  } catch (err) {
+    toast('Error: ' + err.message, 'error');
+  }
+}
+
+function renderCompanyIntel(row) {
+  const intel = row.companyIntel || {};
+  const items = [
+    ['Industry',   intel.industry],
+    ['Products',   intel.products],
+    ['Scale',      intel.scale],
+    ['Newsworthy', intel.newsworthy]
+  ].filter(function (r) { return r[1]; });
+
+  if (!items.length) return '<p class="small-meta" style="margin-bottom:18px;">No company intel recorded yet.</p>';
+
+  return (
+    '<div class="intel-tiles">' +
+      items.map(function (r) {
+        return '<div class="intel-tile">' +
+                 '<p class="intel-tile-label">' + r[0] + '</p>' +
+                 '<p class="intel-tile-value">' + escapeHtml(r[1]) + '</p>' +
+               '</div>';
+      }).join('') +
+    '</div>'
+  );
+}
+
+function renderMarketingInsights(row) {
+  const mi = (row.companyIntel && row.companyIntel.marketingInsights) || {};
+  const rows = [
+    ['Positioning',    mi.positioning],
+    ['Go-to-market',   mi.goToMarket],
+    ['Competitors',    mi.competitors],
+    ['Team signals',   mi.teamSignals],
+    ['Talking points', mi.talkingPoints]
+  ].filter(function (r) { return r[1]; });
+
+  if (!rows.length) return '';
+  return (
+    '<div class="marketing-panel">' +
+      '<p class="marketing-title">Marketing insights for interview</p>' +
+      '<div class="intel-row">' +
+        rows.map(function (r) {
+          return '<p class="intel-label">' + r[0] + '</p><p>' + escapeHtml(r[1]) + '</p>';
+        }).join('') +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function renderYourAnglesAccordion(row) {
+  const key = 'row' + row.rowId;
+  const expanded = state.showAngles[key];
+  const allItems = [
+    { label: 'Key alignments',     value: row.keyAlignments,     type: 'chips-g' },
+    { label: 'Potential concerns', value: row.potentialConcerns, type: 'chips-r' },
+    { label: 'Tailored pitch',     value: row.tailoredPitch,     type: 'text' },
+    { label: 'Personal angle',     value: row.personalAngle,     type: 'text' }
+  ].filter(function (r) { return r.value; });
+
+  function renderChips(text, cls) {
+    const items = String(text).split(';').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (!items.length) return '<p class="small-meta" style="font-style:italic;">None specified</p>';
+    return '<div class="chip-list">' +
+      items.map(function (t) { return '<span class="chip ' + cls + '">' + escapeHtml(t) + '</span>'; }).join('') +
+    '</div>';
   }
 
-  // Then check the intake queue
-  const queueSheet = openQueue();
-  const qLastRow = queueSheet.getLastRow();
-  if (qLastRow > 1) {
-    const qValues = queueSheet.getRange(2, 1, qLastRow - 1, 4).getValues();
-    for (var j = 0; j < qValues.length; j++) {
-      const qUrl = String(qValues[j][1] || '').trim().toLowerCase();
-      if (qUrl && qUrl === target) {
-        return {
-          location: 'queue',
-          summary: {
-            queueId: String(qValues[j][0]),
-            url:     qValues[j][1],
-            addedAt: qValues[j][3]
-          }
-        };
-      }
-    }
+  return (
+    '<div class="accordion">' +
+      '<div class="accordion-head" onclick="toggleAngles(' + row.rowId + ')">' +
+        '<span class="accordion-head-label">Your angles — alignments, concerns, pitch, personal</span>' +
+        '<span class="accordion-head-count">' + (expanded ? '▾' : '▸') + ' ' + allItems.length + ' items</span>' +
+      '</div>' +
+      (expanded ?
+        '<div class="accordion-body">' +
+          allItems.map(function (it) {
+            const head = '<p class="intel-label" style="margin-bottom:8px;">' + it.label + '</p>';
+            if (it.type === 'chips-g') return head + renderChips(it.value, 'g');
+            if (it.type === 'chips-r') return head + renderChips(it.value, 'r');
+            return head + '<p style="font-size:13.5px;margin-bottom:14px;line-height:1.65;">' + escapeHtml(it.value) + '</p>';
+          }).join('') +
+        '</div>'
+      : '') +
+    '</div>'
+  );
+}
+
+function renderDocsTabBody(row) {
+  const resumeClickable = !!(row.resumeMd || row.submittedResumeLink);
+  const coverClickable = !!(row.coverLetterMd || row.submittedCoverLetterLink);
+
+  // Apply-to-job-ad tile is gated on BOTH submitted Drive links being present.
+  // Drive links are the canonical "this is the doc I will submit" — markdown
+  // alone isn't enough because applications go via Drive doc exports/links.
+  // Until both are filed, the tile sits muted with a hint about what's missing.
+  const hasResumeLink = !!row.submittedResumeLink;
+  const hasCoverLink = !!row.submittedCoverLetterLink;
+  const bothLinksReady = hasResumeLink && hasCoverLink;
+  const applyMethod = inferApplyMethod(row.url);
+  const noUrl = !row.url;
+
+  let applyTile;
+  if (noUrl) {
+    applyTile = (
+      '<div class="tile" style="background:var(--bg-inset);border-color:var(--border);opacity:0.6;cursor:not-allowed;" title="No job URL on this card">' +
+        '<p class="tile-label" style="color:var(--text-ter);">Apply</p>' +
+        '<p class="tile-value" style="color:var(--text-ter);font-weight:600;">No URL set</p>' +
+      '</div>'
+    );
+  } else if (!bothLinksReady) {
+    const missing = [];
+    if (!hasResumeLink) missing.push('resume');
+    if (!hasCoverLink) missing.push('cover letter');
+    const missingText = 'Waiting on ' + missing.join(' + ') + ' link';
+    applyTile = (
+      '<div class="tile" style="background:var(--bg-inset);border-color:var(--border);opacity:0.6;cursor:not-allowed;" title="Add submitted Drive links to enable">' +
+        '<p class="tile-label" style="color:var(--text-ter);">🔒 Apply via ' + escapeHtml(applyMethod) + '</p>' +
+        '<p class="tile-value" style="color:var(--text-ter);font-weight:600;font-size:11.5px;">' + escapeHtml(missingText) + '</p>' +
+      '</div>'
+    );
+  } else {
+    applyTile = (
+      '<div class="tile clickable" style="background:var(--accent);border-color:transparent;color:#FFFFFF;" ' +
+        'onclick="openJobAdAndPromptApply(' + row.rowId + ',\'' + escapeAttr(row.url) + '\')" title="Open ' + escapeHtml(applyMethod) + ' and confirm application">' +
+        '<span class="tile-hint" style="color:rgba(255,255,255,0.8);">↗</span>' +
+        '<p class="tile-label" style="color:rgba(255,255,255,0.85);">Apply now via</p>' +
+        '<p class="tile-value" style="color:#FFFFFF;font-weight:700;">' + escapeHtml(applyMethod) + '</p>' +
+      '</div>'
+    );
   }
 
+  const tiles = (
+    '<div class="tile-row three">' +
+      '<div class="tile' + (resumeClickable ? ' clickable' : '') + '" style="background:var(--teal-soft);border-color:transparent;"' +
+        (resumeClickable ? ' onclick="openDocViewer(' + row.rowId + ',\'resume\')" title="Click to view resume"' : '') + '>' +
+        (resumeClickable ? '<span class="tile-hint">View ↗</span>' : '') +
+        '<p class="tile-label" style="color:var(--teal-text);">Resume</p>' +
+        '<p class="tile-value" style="color:var(--teal-text);font-weight:600;">' + (row.resumeMd ? 'Ready' : 'Not yet generated') + '</p>' +
+      '</div>' +
+      '<div class="tile' + (coverClickable ? ' clickable' : '') + '" style="background:var(--teal-soft);border-color:transparent;"' +
+        (coverClickable ? ' onclick="openDocViewer(' + row.rowId + ',\'coverLetter\')" title="Click to view cover letter"' : '') + '>' +
+        (coverClickable ? '<span class="tile-hint">View ↗</span>' : '') +
+        '<p class="tile-label" style="color:var(--teal-text);">Cover letter</p>' +
+        '<p class="tile-value" style="color:var(--teal-text);font-weight:600;">' + (row.coverLetterMd ? 'Ready' : 'Not yet generated') + '</p>' +
+      '</div>' +
+      applyTile +
+    '</div>'
+  );
+
+  return tiles;
+}
+
+function renderSubmittedDocsTabBody(row) {
+  if (!row.submittedResumeLink && !row.submittedCoverLetterLink) {
+    return '<div class="empty-state"><p>No submitted docs recorded.</p></div>';
+  }
+  const resumeEmbed = row.submittedResumeLink
+    ? '<p class="section-title">Submitted resume</p><iframe class="gdoc-embed" src="' + toPreviewUrl(row.submittedResumeLink) + '"></iframe><div style="height:18px;"></div>'
+    : '';
+  const coverEmbed = row.submittedCoverLetterLink
+    ? '<p class="section-title">Submitted cover letter</p><iframe class="gdoc-embed" src="' + toPreviewUrl(row.submittedCoverLetterLink) + '"></iframe>'
+    : '';
+  return resumeEmbed + coverEmbed;
+}
+
+function renderInterviewPrepTabBody(row) {
+  const prep = row.interviewPrep || { questions: [] };
+  const questions = prep.questions || [];
+
+  if (!questions.length) {
+    return (
+      '<div class="empty-state">' +
+        '<p>Interview prep not generated yet.</p>' +
+        '<button class="accent" onclick="copyInterviewPrepPrompt(' + row.rowId + ')">Copy: Generate interview prep prompt</button>' +
+      '</div>'
+    );
+  }
+
+  const counts = practiceCounts(questions);
+  const totalRounds = questions.reduce(function (acc, q) { return acc + (q.rounds ? q.rounds.length : 0); }, 0);
+
+  const progressBar = (
+    '<div class="practice-bar">' +
+      (counts.nailed > 0 ? '<span class="practice-bar-seg" style="flex:' + counts.nailed + ';background:var(--success);"></span>' : '') +
+      (counts.inProgress > 0 ? '<span class="practice-bar-seg" style="flex:' + counts.inProgress + ';background:var(--warning);"></span>' : '') +
+      (counts.notPracticed > 0 ? '<span class="practice-bar-seg" style="flex:' + counts.notPracticed + ';background:var(--bg-tertiary);"></span>' : '') +
+    '</div>'
+  );
+
+  const header = (
+    '<div class="practice-header">' +
+      '<div class="practice-header-row">' +
+        '<div>' +
+          '<p style="font-size:14px;font-weight:600;margin:0 0 3px;letter-spacing:-0.015em;">Practice session</p>' +
+          '<p class="small-meta">' + counts.nailed + ' nailed · ' + counts.inProgress + ' in progress · ' + totalRounds + ' rounds logged</p>' +
+        '</div>' +
+        '<button class="accent" onclick="copyContinuePracticePrompt(' + row.rowId + ')">Copy continue practice prompt</button>' +
+      '</div>' +
+      progressBar +
+    '</div>'
+  );
+
+  const filter = state.filterPrep || 'all';
+  const filterBar = (
+    '<div class="filter-pills">' +
+      '<button class="filter-pill ' + (filter === 'all' ? 'active' : '') + '" onclick="setPrepFilter(\'all\')">All (' + questions.length + ')</button>' +
+      '<button class="filter-pill ' + (filter === 'inProgress' ? 'active' : '') + '" onclick="setPrepFilter(\'inProgress\')">In progress (' + counts.inProgress + ')</button>' +
+      '<button class="filter-pill ' + (filter === 'nailed' ? 'active' : '') + '" onclick="setPrepFilter(\'nailed\')">Nailed (' + counts.nailed + ')</button>' +
+    '</div>'
+  );
+
+  const visibleQs = questions.filter(function (q) {
+    if (filter === 'inProgress') return q.status === 'in_progress';
+    if (filter === 'nailed')     return q.status === 'nailed';
+    return true;
+  });
+
+  return header + filterBar + visibleQs.map(function (q) { return renderQuestion(row.rowId, q); }).join('');
+}
+
+function renderQuestion(rowId, q) {
+  const key = rowId + '-' + q.id;
+  const expanded = state.expandedQuestions[key];
+  const dotColor = q.status === 'nailed' ? 'var(--success)' : (q.status === 'in_progress' ? 'var(--warning)' : 'var(--border-hover)');
+  const roundCount = q.rounds ? q.rounds.length : 0;
+  const statusLabel = q.status === 'nailed' ? 'Nailed' : (q.status === 'in_progress' ? 'In progress' : 'Not practiced');
+  const classes = ['q-card'];
+  if (q.status === 'in_progress' && expanded) classes.push('amber');
+
+  const header = (
+    '<div class="q-head" onclick="toggleQuestion(\'' + key + '\')">' +
+      '<span class="status-dot" style="background:' + dotColor + ';"></span>' +
+      '<div style="flex:1;">' +
+        (expanded ?
+          '<p class="small-meta" style="margin-bottom:3px;">' + q.id.toUpperCase() + ' · ' + statusLabel + (roundCount ? ' · Round ' + q.currentRound + ' of ' + roundCount : '') + '</p>' +
+          '<p style="font-size:14px;font-weight:600;margin:0;letter-spacing:-0.01em;line-height:1.5;">' + escapeHtml(q.text) + '</p>'
+        :
+          '<p style="font-size:13.5px;margin:0;line-height:1.5;">' + q.id.toUpperCase() + ' · ' + escapeHtml(truncate(q.text, 90)) + '</p>'
+        ) +
+      '</div>' +
+      '<span class="small-meta">' + (expanded ? '▾' : statusLabel + ' · ' + roundCount + ' rounds ▸') + '</span>' +
+    '</div>'
+  );
+
+  if (!expanded) return '<div class="' + classes.join(' ') + '">' + header + '</div>';
+
+  const currentRound = q.rounds && q.rounds.length ? q.rounds[q.rounds.length - 1] : null;
+  let body = '';
+
+  if (currentRound) {
+    body += '<p class="small-meta" style="margin:4px 0 10px;text-transform:uppercase;letter-spacing:0.06em;font-weight:700;">Current · Round ' + currentRound.round + '</p>';
+    body += '<div class="ans-block" style="background:var(--accent-soft);"><p class="ans-label" style="color:var(--accent-text);">Your answer</p><p style="margin:0;color:var(--accent-text);">' + escapeHtml(currentRound.userAnswer) + '</p></div>';
+    body += '<div class="ans-block" style="background:var(--warning-soft);"><p class="ans-label" style="color:var(--warning-text);">Claude feedback</p><p style="margin:0;color:var(--warning-text);">' + escapeHtml(currentRound.feedback) + '</p></div>';
+    body += '<div class="q-actions">';
+    if (q.status !== 'nailed') {
+      body += '<button class="small accent" onclick="copyContinuePracticePrompt(' + rowId + ')">Continue round ' + (currentRound.round + 1) + '</button>';
+      body += '<button class="small" onclick="markQuestionNailed(' + rowId + ',\'' + q.id + '\')">Mark as nailed</button>';
+    } else {
+      body += '<button class="small" onclick="copyContinuePracticePrompt(' + rowId + ')">Re-practice</button>';
+    }
+    body += '</div>';
+  } else if (q.preparedAnswer) {
+    body += '<div class="ans-block" style="background:var(--bg-secondary);"><p class="ans-label" style="color:var(--text-sec);">Prepared answer (starting point)</p><p style="margin:0;">' + escapeHtml(q.preparedAnswer) + '</p></div>';
+    body += '<div class="q-actions"><button class="small accent" onclick="copyContinuePracticePrompt(' + rowId + ')">Start practice</button></div>';
+  }
+
+  if (q.rounds && q.rounds.length > 1) {
+    const prevKey = rowId + '-' + q.id;
+    const prevExpanded = state.showPreviousRounds[prevKey];
+    const previousRounds = q.rounds.slice(0, -1).reverse();
+    body += '<div style="margin-top:16px;">';
+    body += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:6px;cursor:pointer;" onclick="togglePreviousRounds(\'' + prevKey + '\')">';
+    body += '<span style="font-size:12.5px;font-weight:500;color:var(--text-sec);">' + (prevExpanded ? '▾' : '▸') + ' Previous rounds</span>';
+    body += '<span class="small-meta">' + previousRounds.length + '</span>';
+    body += '</div>';
+    if (prevExpanded) {
+      body += previousRounds.map(function (r) {
+        return '<div style="border:1px solid var(--border);border-radius:var(--r-md);padding:10px 14px;font-size:12.5px;margin-bottom:6px;background:var(--bg-inset);">' +
+                 '<span style="font-weight:600;">Round ' + r.round + '</span>' +
+                 '<span style="color:var(--text-sec);"> · ' + escapeHtml(r.summary || '') + '</span>' +
+               '</div>';
+      }).join('');
+    }
+    body += '</div>';
+  }
+
+  return '<div class="' + classes.join(' ') + '">' + header + '<div class="q-body">' + body + '</div></div>';
+}
+
+/* ============================================================
+   ACTION ROWS
+   ============================================================ */
+
+function renderStage1ActionsInner(row, tab) {
+  return (
+    '<div class="actions-left">' +
+      (row.url ? '<button onclick="openJobAd(\'' + escapeAttr(row.url) + '\')">View ad ↗</button>' : '') +
+      (row.adContent
+        ? '<button onclick="openAdContentModal(' + row.rowId + ')">Saved ad copy</button>'
+        : '<button class="needs-attention" onclick="openAdContentModal(' + row.rowId + ')" title="This card is missing ad content. Paste it in so re-analyses work properly.">⚠ Add ad content</button>') +
+      (tab === 'intelligence' ? '<button onclick="refreshIntel(' + row.rowId + ')">Refresh intel</button>' : '') +
+    '</div>' +
+    '<div class="actions-right">' +
+      '<button class="accent" onclick="copyGenerateDocsPrompt(' + row.rowId + ')">Copy generate docs prompt</button>' +
+    '</div>'
+  );
+}
+
+function renderStage2ActionsInner(row, tab) {
+  return (
+    '<div class="actions-left">' +
+      (row.adContent
+        ? '<button onclick="openAdContentModal(' + row.rowId + ')">Saved ad copy</button>'
+        : '<button class="needs-attention" onclick="openAdContentModal(' + row.rowId + ')" title="This card is missing ad content. Paste it in so re-analyses work properly.">⚠ Add ad content</button>') +
+      '<button onclick="copyGenerateDocsPrompt(' + row.rowId + ')">Regenerate docs</button>' +
+      (tab === 'intelligence' ? '<button onclick="refreshIntel(' + row.rowId + ')">Refresh intel</button>' : '') +
+    '</div>' +
+    '<div class="actions-right">' +
+      '<button class="primary" onclick="openModal(\'markAsApplied\',{rowId:' + row.rowId + '})">Mark as applied</button>' +
+    '</div>'
+  );
+}
+
+function renderStage3ActionsInner(row, tab) {
+  let primary = '';
+  if (tab === 'interviewPrep') primary = '<button onclick="copyInterviewPrepPrompt(' + row.rowId + ')">Regenerate prep</button>';
+
+  return (
+    '<div class="actions-left">' +
+      (row.url ? '<button onclick="openJobAd(\'' + escapeAttr(row.url) + '\')">View ad ↗</button>' : '') +
+      (row.adContent
+        ? '<button onclick="openAdContentModal(' + row.rowId + ')">Saved ad copy</button>'
+        : '<button class="needs-attention" onclick="openAdContentModal(' + row.rowId + ')" title="This card is missing ad content. Paste it in so re-analyses work properly.">⚠ Add ad content</button>') +
+      (tab === 'intelligence' ? '<button onclick="refreshIntel(' + row.rowId + ')">Refresh intel</button>' : '') +
+    '</div>' +
+    '<div class="actions-right">' + primary + '</div>'
+  );
+}
+
+/* Unified Outcome button — replaces the old Hold dropdown, Log outcome dropdown,
+   and standalone Archive button. Renders as a single trigger; popover renders
+   separately at document level so it escapes any clipping containers.
+   
+   Note: as of Deploy A1, the only caller is the Journey timeline (inline,
+   in renderStatusTimeline). The footer-action callers were removed because
+   they duplicated the timeline button. The function below is kept commented
+   out for reference in case we want to reintroduce a separate trigger.
+   
+   function renderOutcomeButton(row) { ... }  // removed in Deploy A1
+*/
+
+/* Renders the popover into the DOM at document body level. Called from render().
+   Returns empty string if no popover is open. Uses position:fixed so it escapes
+   any modal/parent overflow:hidden. */
+function renderOutcomePopover() {
+  if (!state.outcomePopover) return '';
+  const popover = state.outcomePopover;
+  const row = state.pipeline.find(function (r) { return r.rowId === popover.rowId; });
+  if (!row) return '';
+
+  const isStage1 = row.status === 'Sourced' || row.status === 'Analysed' || row.status === 'Ready to Apply' || isHoldingStatus(row.status);
+  const isApplied = hasBeenApplied(row);
+  const isHeldOrArchived = isHoldingStatus(row.status) || isArchivedStatus(row.status);
+
+  // OUTCOME section: only show for cards that have been applied (Stage 3 territory).
+  // Pre-applied cards can't have interviewing/offer outcomes yet.
+  const outcomeSection = !isStage1
+    ? (
+        '<div class="outcome-popover-section">' +
+          '<p class="outcome-popover-label">Outcome</p>' +
+          '<button class="outcome-popover-item" onclick="handleOutcomePopoverChoice(\'Interviewing\')">Interviewing</button>' +
+          '<button class="outcome-popover-item" onclick="handleOutcomePopoverChoice(\'Interviewed\')">Interviewed</button>' +
+          '<button class="outcome-popover-item" onclick="handleOutcomePopoverChoice(\'Offer\')">Offer</button>' +
+          '<button class="outcome-popover-item" onclick="handleOutcomePopoverChoice(\'Accepted\')">Accepted</button>' +
+          '<button class="outcome-popover-item danger" onclick="handleOutcomePopoverChoice(\'Rejected\')">Rejected</button>' +
+          '<button class="outcome-popover-item danger" onclick="handleOutcomePopoverChoice(\'Withdrawn\')">Withdrawn</button>' +
+        '</div>'
+      )
+    : (
+        '<div class="outcome-popover-section">' +
+          '<p class="outcome-popover-label">Close</p>' +
+          '<button class="outcome-popover-item danger" onclick="handleOutcomePopoverChoice(\'__archive\')">Archive (not pursuing)</button>' +
+        '</div>'
+      );
+
+  // PAUSE section: hold/unsure/rethink. Always shown unless already in one of these.
+  const pauseSection = (
+    '<div class="outcome-popover-section">' +
+      '<p class="outcome-popover-label">Pause</p>' +
+      '<button class="outcome-popover-item" onclick="handleOutcomePopoverChoice(\'On Hold\')">On Hold</button>' +
+      '<button class="outcome-popover-item" onclick="handleOutcomePopoverChoice(\'Unsure\')">Unsure</button>' +
+      '<button class="outcome-popover-item" onclick="handleOutcomePopoverChoice(\'Rethink\')">Rethink</button>' +
+    '</div>'
+  );
+
+  // RESTORE section: only if currently held or archived
+  const restoreSection = isHeldOrArchived
+    ? (
+        '<div class="outcome-popover-section">' +
+          '<button class="outcome-popover-item" onclick="handleOutcomePopoverChoice(\'__restore\')">↩ Back to active</button>' +
+        '</div>'
+      )
+    : '';
+
+  const style = 'left:' + popover.x + 'px;top:' + popover.y + 'px;';
+
+  return (
+    '<div class="outcome-popover-backdrop" onclick="closeOutcomePopover()"></div>' +
+    '<div class="outcome-popover" style="' + style + '" onclick="event.stopPropagation()">' +
+      outcomeSection +
+      pauseSection +
+      restoreSection +
+    '</div>'
+  );
+}
+
+function toggleOutcomePopover(event, rowId) {
+  event.stopPropagation();
+  // If already open for this row, close it
+  if (state.outcomePopover && state.outcomePopover.rowId === rowId) {
+    closeOutcomePopover();
+    return;
+  }
+  // Position popover relative to the trigger button. We render it at fixed
+  // coords below the button, right-aligned to its right edge so it doesn't
+  // overflow the right side of the viewport.
+  const rect = event.currentTarget.getBoundingClientRect();
+  const popoverWidth = 200;
+  const popoverHeight = 320; // estimate; will scroll if longer
+  let x = rect.right - popoverWidth;
+  let y = rect.bottom + 6;
+  // Keep within viewport
+  if (x < 8) x = 8;
+  if (x + popoverWidth > window.innerWidth - 8) x = window.innerWidth - popoverWidth - 8;
+  // If not enough room below, flip above
+  if (y + popoverHeight > window.innerHeight - 8) {
+    y = rect.top - popoverHeight - 6;
+    if (y < 8) y = 8;
+  }
+  state.outcomePopover = { rowId: rowId, x: x, y: y };
+  render();
+}
+
+function closeOutcomePopover() {
+  if (!state.outcomePopover) return;
+  state.outcomePopover = null;
+  render();
+}
+
+function handleOutcomePopoverChoice(value) {
+  if (!state.outcomePopover) return;
+  const rowId = state.outcomePopover.rowId;
+  closeOutcomePopover();
+  if (value === '__restore') {
+    handleHoldChange(rowId, '__restore');
+    return;
+  }
+  if (value === '__archive') {
+    confirmArchive(rowId);
+    return;
+  }
+  // Holding statuses go through hold handler (preserves existing semantics)
+  if (value === 'On Hold' || value === 'Unsure' || value === 'Rethink') {
+    handleHoldChange(rowId, value);
+    return;
+  }
+  // Rejected/Withdrawn route through confirmArchive for the journey-aware flow
+  if (value === 'Rejected' || value === 'Withdrawn') {
+    // For applied cards, give them the "rejected vs withdrew" choice.
+    // For pre-applied cards we never get here (outcome section is hidden).
+    confirmArchive(rowId);
+    return;
+  }
+  // Positive outcomes: log directly
+  handleOutcomeChange(rowId, value);
+}
+
+/* ============================================================
+   MODALS
+   ============================================================ */
+
+function renderModal() {
+  const root = document.getElementById('modal-root');
+  if (!state.modalOpen) {
+    root.innerHTML = '';
+    document.body.classList.remove('modal-open');
+    return;
+  }
+  document.body.classList.add('modal-open');
+
+  let content = '';
+  if (state.modalOpen === 'intake')           content = renderIntakeModal();
+  if (state.modalOpen === 'phase1PasteBack')  content = renderPhase1PasteBackModal();
+  if (state.modalOpen === 'interviewPrepPasteBack') content = renderInterviewPrepPasteBackModal();
+  if (state.modalOpen === 'openResume')       content = renderOpenDocModal('resume');
+  if (state.modalOpen === 'openCoverLetter')  content = renderOpenDocModal('coverLetter');
+  if (state.modalOpen === 'docViewer')        content = renderDocViewerModal();
+  if (state.modalOpen === 'markAsApplied')    content = renderMarkAsAppliedModal();
+  if (state.modalOpen === 'confirmArchive')   content = renderConfirmArchiveModal();
+  if (state.modalOpen === 'confirmRefreshIntel') content = renderConfirmRefreshIntelModal();
+  if (state.modalOpen === 'editJourney')        content = renderEditJourneyModal();
+  if (state.modalOpen === 'batchUpdateJourney') content = renderBatchUpdateJourneyModal();
+  if (state.modalOpen === 'cardDetail')       content = renderCardDetailModal();
+  if (state.modalOpen === 'adContent')        content = renderAdContentModal();
+  if (state.modalOpen === 'batchPasteBack')   content = renderBatchPasteBackModal();
+
+  root.innerHTML = '<div class="modal-overlay" onclick="if(event.target===this)closeModal()">' + content + '</div>';
+}
+
+function renderCardDetailModal() {
+  const row = state.pipeline.find(function (r) { return r.rowId === state.selectedRowId; });
+  if (!row) return '';
+  let inner;
+  if (row.status === 'Analysed' || row.status === 'Sourced' || isHoldingStatus(row.status)) inner = renderStage1DetailBody(row);
+  else if (row.status === 'Ready to Apply') inner = renderStage2DetailBody(row);
+  else inner = renderStage3DetailBody(row);
+  return '<div class="modal detail-modal stage-' + stageForRow(row) + '">' + inner + '</div>';
+}
+
+function stageForRow(row) {
+  if (row.status === 'Ready to Apply') return '2';
+  if (isAppliedSubStatus(row.status)) return '3';
+  return '1';
+}
+
+function renderIntakeModal() {
+  const queue = state.queue;
+  const queueHtml = queue.length
+    ? (
+        '<div class="queue-list">' +
+          '<div class="queue-list-header">' +
+            '<span class="queue-list-label">Queued · ' + queue.length + ' job' + (queue.length > 1 ? 's' : '') + '</span>' +
+            '<button class="small ghost" onclick="handleClearQueue()">Clear all</button>' +
+          '</div>' +
+          queue.map(function (item) {
+            const pillClass = item.source === 'Seek' ? 'pill-blue' : (item.source === 'LinkedIn' ? 'pill-purple' : 'pill-grey');
+            return (
+              '<div class="queue-item">' +
+                '<div class="queue-item-main">' +
+                  '<div class="queue-item-top">' +
+                    '<span class="pill ' + pillClass + '">' + item.source + '</span>' +
+                    '<span class="small-meta">Added ' + timeSince(item.addedAt) + '</span>' +
+                  '</div>' +
+                  '<p class="queue-item-preview">' + escapeHtml(item.url) + '</p>' +
+                '</div>' +
+                '<button class="small ghost" onclick="handleRemoveFromQueue(\'' + item.id + '\')" title="Remove">✕</button>' +
+              '</div>'
+            );
+          }).join('') +
+        '</div>'
+      )
+    : '';
+
+  const copyDisabled = queue.length === 0;
+
+  return (
+    '<div class="modal">' +
+      '<div class="modal-header">' +
+        '<div>' +
+          '<p class="modal-title">Add jobs to pipeline</p>' +
+          '<p class="modal-subtitle">Paste content and URL for each job. Build the queue, then generate one prompt for all of them.</p>' +
+        '</div>' +
+        '<button class="modal-close" onclick="closeModal()" aria-label="Close">✕</button>' +
+      '</div>' +
+      '<div class="modal-body">' +
+        queueHtml +
+        '<div class="step-block active">' +
+          '<span class="step-label" style="background:var(--accent-soft);color:var(--accent-text);">Add to queue</span>' +
+          '<div class="field">' +
+            '<label class="field-label">Job ad content</label>' +
+            '<textarea id="intake-content" placeholder="Paste the full job ad content here..." style="min-height:96px;"></textarea>' +
+          '</div>' +
+          '<div class="field">' +
+            '<label class="field-label">Job ad URL</label>' +
+            '<input type="url" id="intake-url" placeholder="https://..." />' +
+          '</div>' +
+          '<div style="text-align:right;">' +
+            '<button class="primary" onclick="handleAddToQueue()">+ Add to queue</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="step-block">' +
+          '<span class="step-label" style="background:var(--bg-tertiary);color:var(--text-sec);">Paste results back</span>' +
+          '<div class="field" style="margin-bottom:0;">' +
+            '<textarea class="mono" id="intake-tsv" placeholder="Paste the TSV output from Claude here (wrapped in <tsv>...</tsv> tags)..." style="min-height:80px;"></textarea>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="modal-footer">' +
+        '<button onclick="closeModal()">Close</button>' +
+        '<div style="display:flex;gap:8px;">' +
+          '<button onclick="handleBatchAppend()">Save all to pipeline</button>' +
+          '<button class="accent" onclick="copyAnalysePrompt()" ' + (copyDisabled ? 'disabled' : '') + '>Copy analyse master prompt</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+/**
+ * Phase 1 paste-back: saves generated docs as Google Doc LINKS only.
+ * The two "Paste generated cover letter content..." / "Paste generated resume markdown..."
+ * textareas were removed 23-Apr-2026 — they served no purpose (content stays in the
+ * Google Doc, which is the source of truth, and mirroring markdown in the sheet
+ * just wasted space + risked drift).
+ */
+function renderPhase1PasteBackModal() {
+  const rowId = state.modalData.rowId;
+  const row = state.pipeline.find(function (r) { return r.rowId === rowId; });
+  if (!row) return '';
+
+  // Pre-built folder/file name templates using the card's company + role.
+  // Click a chip to copy the VALUE (without the "Folder:" / "Cover Letter:" /
+  // "Resume:" prefix) so it pastes cleanly into Drive's rename field. The
+  // prefix is shown as a separate "kind" tag on the chip for identification.
+  const company = (row.company || 'Company').trim();
+  const roleTitle = (row.role || 'Role').trim();
+  const folderValue = company + ' - ' + roleTitle;
+  const coverValue  = 'Louie Radburnd Cover Letter - ' + company + ' - ' + roleTitle;
+  const resumeValue = 'Louie Radburnd Resume - ' + company + ' - ' + roleTitle;
+
+  const driveFolderUrl = 'https://drive.google.com/drive/u/0/folders/1vJwIj9MccdcQUE01zVeTmqiExawMcnJ4';
+
+  return (
+    '<div class="modal">' +
+      '<div class="modal-header">' +
+        '<div>' +
+          '<p class="modal-title">Save generated documents</p>' +
+          '<p class="modal-subtitle">Prompt copied. Paste into Claude, create Google Docs, then link them here.</p>' +
+        '</div>' +
+        '<button class="modal-close" onclick="closeModal()" aria-label="Close">✕</button>' +
+      '</div>' +
+      '<div class="modal-body">' +
+        '<div style="background:var(--bg-inset);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 14px;margin-bottom:18px;display:flex;align-items:center;gap:12px;">' +
+          '<span class="small-meta">Prompt for</span>' +
+          '<span style="font-size:13px;font-weight:600;">' + escapeHtml(row.role) + ' · ' + escapeHtml(row.company) + '</span>' +
+          '<span style="margin-left:auto;font-size:11.5px;color:var(--success-text);font-weight:500;">✓ copied</span>' +
+        '</div>' +
+
+        /* Drive helper panel — quick access to the parent folder plus three
+           click-to-copy filename chips. Each chip shows a "kind" tag (Folder/
+           Cover Letter/Resume) for visual identification, separate from the
+           actual value that gets copied. */
+        '<div class="drive-helper">' +
+          '<div class="drive-helper-row">' +
+            '<a class="drive-helper-link" href="' + driveFolderUrl + '" target="_blank" rel="noopener" title="Open the parent Drive folder">' +
+              '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>' +
+              'Open Drive folder ↗' +
+            '</a>' +
+            '<span class="drive-helper-hint">Tap a chip to copy the name, paste into Drive</span>' +
+          '</div>' +
+          '<div class="drive-helper-chips">' +
+            '<button class="drive-chip" onclick="copyDriveTemplate(this, ' + JSON.stringify(folderValue).replace(/"/g, '&quot;') + ')">' +
+              '<span class="drive-chip-icon">📁</span>' +
+              '<span class="drive-chip-kind">Folder</span>' +
+              '<span class="drive-chip-label">' + escapeHtml(folderValue) + '</span>' +
+              '<span class="drive-chip-action">Copy</span>' +
+            '</button>' +
+            '<button class="drive-chip" onclick="copyDriveTemplate(this, ' + JSON.stringify(coverValue).replace(/"/g, '&quot;') + ')">' +
+              '<span class="drive-chip-icon">✉️</span>' +
+              '<span class="drive-chip-kind">Cover</span>' +
+              '<span class="drive-chip-label">' + escapeHtml(coverValue) + '</span>' +
+              '<span class="drive-chip-action">Copy</span>' +
+            '</button>' +
+            '<button class="drive-chip" onclick="copyDriveTemplate(this, ' + JSON.stringify(resumeValue).replace(/"/g, '&quot;') + ')">' +
+              '<span class="drive-chip-icon">📄</span>' +
+              '<span class="drive-chip-kind">Resume</span>' +
+              '<span class="drive-chip-label">' + escapeHtml(resumeValue) + '</span>' +
+              '<span class="drive-chip-action">Copy</span>' +
+            '</button>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="field">' +
+          '<label class="field-label">Cover letter Google Doc link</label>' +
+          '<input type="url" id="p1-cover-link" placeholder="https://docs.google.com/document/d/..." />' +
+        '</div>' +
+        '<div class="field">' +
+          '<label class="field-label">Resume Google Doc link</label>' +
+          '<input type="url" id="p1-resume-link" placeholder="https://docs.google.com/document/d/..." />' +
+        '</div>' +
+      '</div>' +
+      '<div class="modal-footer">' +
+        '<button onclick="closeModal()">Cancel</button>' +
+        '<button class="primary" onclick="handleSavePhase1Docs(' + rowId + ')">Save and move to ready</button>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+/**
+ * Copy a template string to clipboard and flash the button to confirm.
+ * Used by the Drive helper chips in the Phase 1 paste-back modal. Keeps
+ * the confirmation contained to the individual chip rather than firing
+ * a toast for each copy — toasts stack up fast when copying three times
+ * in a row.
+ */
+async function copyDriveTemplate(btn, text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    const action = btn.querySelector('.drive-chip-action');
+    if (!action) return;
+    const original = action.textContent;
+    action.textContent = '✓ Copied';
+    btn.classList.add('drive-chip-copied');
+    setTimeout(function () {
+      action.textContent = original;
+      btn.classList.remove('drive-chip-copied');
+    }, 1400);
+  } catch (err) {
+    toast('Copy failed: ' + err.message, 'error');
+  }
+}
+
+function renderInterviewPrepPasteBackModal() {
+  const rowId = state.modalData.rowId;
+  const row = state.pipeline.find(function (r) { return r.rowId === rowId; });
+  if (!row) return '';
+
+  const hasExisting = row.interviewPrep && row.interviewPrep.questions && row.interviewPrep.questions.length;
+  const warningLine = hasExisting
+    ? '<p class="small-meta" style="color:var(--warning-text);margin-top:8px;">⚠ This will replace existing prep (' + row.interviewPrep.questions.length + ' questions).</p>'
+    : '';
+
+  return (
+    '<div class="modal wide">' +
+      '<div class="modal-header">' +
+        '<div>' +
+          '<p class="small-meta" style="text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;font-weight:600;">Save interview prep</p>' +
+          '<p class="modal-title">' + escapeHtml(row.role || '') + ' · ' + escapeHtml(row.company || '') + '</p>' +
+          '<p class="modal-subtitle">Prompt copied. Paste Claude\'s JSON response below. The response should start with <code>{</code> and contain a <code>questions</code> array.</p>' +
+          warningLine +
+        '</div>' +
+        '<button class="modal-close" onclick="closeModal()" aria-label="Close">✕</button>' +
+      '</div>' +
+      '<div class="modal-body">' +
+        '<div class="field" style="margin:0;">' +
+          '<label class="field-label">Interview prep JSON from Claude</label>' +
+          '<textarea id="ip-paste-response" class="mono" placeholder=\'{\\n  "questions": [...]\\n}\' style="min-height:320px;"></textarea>' +
+        '</div>' +
+        '<p class="small-meta" style="margin-top:10px;">Tip: if Claude wrapped the JSON in ```json code fences or extra prose, paste the whole thing anyway — the parser will extract the JSON block.</p>' +
+      '</div>' +
+      '<div class="modal-footer">' +
+        '<button onclick="closeModal()">Cancel</button>' +
+        '<button class="primary" onclick="handleSaveInterviewPrep(' + rowId + ')">Save prep</button>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+async function handleSaveInterviewPrep(rowId) {
+  const el = document.getElementById('ip-paste-response');
+  if (!el) return;
+  const raw = (el.value || '').trim();
+  if (!raw) { toast('Paste Claude\'s response first', 'error'); return; }
+
+  // Tolerate common wrapper shapes: ```json fences, leading/trailing prose,
+  // or the whole thing already being clean JSON. Find first { through last }.
+  let jsonText = raw;
+  const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenceMatch) jsonText = fenceMatch[1].trim();
+  const firstBrace = jsonText.indexOf('{');
+  const lastBrace  = jsonText.lastIndexOf('}');
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+    toast('Could not find JSON object in response', 'error');
+    return;
+  }
+  jsonText = jsonText.slice(firstBrace, lastBrace + 1);
+
+  // Validate locally before round-tripping to Apps Script — fast feedback.
+  let parsed;
+  try { parsed = JSON.parse(jsonText); }
+  catch (err) { toast('Invalid JSON: ' + err.message, 'error'); return; }
+
+  if (!parsed.questions || !Array.isArray(parsed.questions) || !parsed.questions.length) {
+    toast('JSON is missing a non-empty "questions" array', 'error');
+    return;
+  }
+
+  try {
+    const res = await apiPost('saveInterviewPrep', {
+      rowId: rowId,
+      interviewPrepJson: JSON.stringify(parsed)
+    });
+    if (!res.ok) throw new Error(res.error || 'Failed to save');
+    toast('Saved ' + parsed.questions.length + ' interview prep questions', 'success');
+    closeModal();
+    await refreshAll();
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+function renderDocViewerModal() {
+  const rowId = state.modalData.rowId;
+  const docType = state.modalData.docType;
+  const activeView = state.modalData.activeView || 'markdown';
+  const row = state.pipeline.find(function (r) { return r.rowId === rowId; });
+  if (!row) return '';
+
+  const md = docType === 'resume' ? row.resumeMd : row.coverLetterMd;
+  const link = docType === 'resume' ? row.submittedResumeLink : row.submittedCoverLetterLink;
+  const label = docType === 'resume' ? 'Tailored resume' : 'Tailored cover letter';
+  const hasMd = !!md;
+  const hasDoc = !!link;
+  const embedUrl = toPreviewUrl(link);
+
+  const tabs = (
+    '<div class="doc-viewer-tabs">' +
+      '<button class="doc-viewer-tab' + (activeView === 'markdown' ? ' active' : '') + '"' +
+        (hasMd ? '' : ' disabled') +
+        ' onclick="switchDocViewerView(\'markdown\')">Markdown' +
+        (hasMd ? '' : ' (none)') +
+      '</button>' +
+      '<button class="doc-viewer-tab' + (activeView === 'gdoc' ? ' active' : '') + '"' +
+        (hasDoc ? '' : ' disabled') +
+        ' onclick="switchDocViewerView(\'gdoc\')">Google Doc' +
+        (hasDoc ? '' : ' (not yet created)') +
+      '</button>' +
+    '</div>'
+  );
+
+  let pane;
+  if (activeView === 'markdown' && hasMd) {
+    pane = (
+      '<div class="doc-md-pane">' +
+        '<pre class="doc-md-content">' + escapeHtml(md) + '</pre>' +
+      '</div>'
+    );
+  } else if (activeView === 'gdoc' && hasDoc) {
+    pane = '<iframe class="gdoc-embed" src="' + embedUrl + '"></iframe>';
+  } else {
+    pane = '<div class="empty-state"><p>Nothing to show in this view yet.</p></div>';
+  }
+
+  const actionsBar = (
+    '<div style="padding:12px 28px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;">' +
+      (hasMd ? '<button onclick="copyToClipboard(' + JSON.stringify(md).replace(/</g, '\\u003c') + ',\'Markdown copied\')">Copy markdown</button>' : '') +
+      (hasDoc ? '<button class="accent" onclick="openExternal(\'' + escapeAttr(link) + '\')">Open in Drive ↗</button>' : '') +
+      (hasDoc ? '<button onclick="copyToClipboard(\'' + escapeAttr(link) + '\',\'Drive link copied\')">Copy Drive link</button>' : '') +
+      '<button onclick="copyGenerateDocsPrompt(' + rowId + ')">Regenerate from Claude</button>' +
+    '</div>'
+  );
+
+  return (
+    '<div class="modal wide">' +
+      '<div class="modal-header">' +
+        '<div>' +
+          '<p class="small-meta" style="text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;font-weight:600;">' + label + '</p>' +
+          '<p class="modal-title">' + escapeHtml(row.role) + ' · ' + escapeHtml(row.company) + '</p>' +
+          '<p class="modal-subtitle">' + (activeView === 'markdown' ? 'Generated content from Claude' : 'Embedded live from Google Drive') + '</p>' +
+        '</div>' +
+        '<button class="modal-close" onclick="closeModal()" aria-label="Close">✕</button>' +
+      '</div>' +
+      tabs +
+      actionsBar +
+      pane +
+    '</div>'
+  );
+}
+
+function openDocViewer(rowId, docType) {
+  const row = state.pipeline.find(function (r) { return r.rowId === rowId; });
+  if (!row) return;
+  const hasMd = docType === 'resume' ? !!row.resumeMd : !!row.coverLetterMd;
+  // Default to markdown if it exists (newer/more frequent case), else gdoc
+  const defaultView = hasMd ? 'markdown' : 'gdoc';
+  openModal('docViewer', { rowId: rowId, docType: docType, activeView: defaultView });
+}
+
+function switchDocViewerView(view) {
+  state.modalData.activeView = view;
+  renderModal();
+}
+
+function renderOpenDocModal(docType) {
+  const rowId = state.modalData.rowId;
+  const row = state.pipeline.find(function (r) { return r.rowId === rowId; });
+  if (!row) return '';
+  const link = docType === 'resume' ? row.submittedResumeLink : row.submittedCoverLetterLink;
+  const label = docType === 'resume' ? 'Tailored resume' : 'Tailored cover letter';
+  const embedUrl = toPreviewUrl(link);
+
+  return (
+    '<div class="modal wide">' +
+      '<div class="modal-header">' +
+        '<div>' +
+          '<p class="small-meta" style="text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;font-weight:600;">' + label + '</p>' +
+          '<p class="modal-title">' + escapeHtml(row.role) + ' · ' + escapeHtml(row.company) + '</p>' +
+          '<p class="modal-subtitle">Embedded live from Google Drive</p>' +
+        '</div>' +
+        '<button class="modal-close" onclick="closeModal()" aria-label="Close">✕</button>' +
+      '</div>' +
+      '<div style="padding:12px 28px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;">' +
+        '<button class="accent" onclick="openExternal(\'' + escapeAttr(link) + '\')">Open in Drive ↗</button>' +
+        '<button onclick="copyToClipboard(\'' + escapeAttr(link) + '\',\'Link copied\')">Copy Drive link</button>' +
+        '<button onclick="copyGenerateDocsPrompt(' + rowId + ')">Regenerate from Claude</button>' +
+      '</div>' +
+      (embedUrl ? '<iframe class="gdoc-embed" src="' + embedUrl + '"></iframe>' : '<div class="empty-state"><p>No Google Doc link set.</p></div>') +
+    '</div>'
+  );
+}
+
+function renderMarkAsAppliedModal() {
+  const rowId = state.modalData.rowId;
+  const row = state.pipeline.find(function (r) { return r.rowId === rowId; });
+  if (!row) return '';
+  const today = new Date().toISOString().split('T')[0];
+  const url = row.url || '';
+  let defaultVia = 'Company website';
+  if (/linkedin\.com/i.test(url))           defaultVia = 'LinkedIn Easy Apply';
+  else if (/seek\.com/i.test(url))          defaultVia = 'Seek';
+  else if (/indeed\.com/i.test(url))        defaultVia = 'Indeed';
+  else if (/mailto:|gmail|outlook/i.test(url)) defaultVia = 'Email';
+
+  const viaOptions = ['LinkedIn Easy Apply', 'Seek', 'Indeed', 'Company website', 'Email', 'Referral']
+    .map(function (v) { return '<option' + (v === defaultVia ? ' selected' : '') + '>' + v + '</option>'; })
+    .join('');
+
+  return (
+    '<div class="modal" style="max-width:460px;">' +
+      '<div class="modal-header">' +
+        '<div>' +
+          '<p class="modal-title">Confirm application</p>' +
+          '<p class="modal-subtitle">' + escapeHtml(row.role || '') + ' at ' + escapeHtml(row.company || '') + '</p>' +
+        '</div>' +
+        '<button class="modal-close" onclick="closeModal()" aria-label="Close">✕</button>' +
+      '</div>' +
+      '<div class="modal-body">' +
+        '<p style="font-size:13.5px;color:var(--text-sec);margin-bottom:18px;line-height:1.5;">' +
+          'This will mark the application as submitted and move the card to Applied. The tailored resume and cover letter already on the card will be used as your submitted versions.' +
+        '</p>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
+          '<div class="field" style="margin:0;">' +
+            '<label class="field-label">Applied via</label>' +
+            '<select id="ma-via">' + viaOptions + '</select>' +
+          '</div>' +
+          '<div class="field" style="margin:0;">' +
+            '<label class="field-label">Application date</label>' +
+            '<input type="date" id="ma-date" value="' + today + '" />' +
+          '</div>' +
+        '</div>' +
+        '<details style="margin-top:18px;">' +
+          '<summary style="cursor:pointer;font-size:12.5px;color:var(--text-ter);user-select:none;">Override submitted docs (only if you tweaked them before submitting)</summary>' +
+          '<div style="margin-top:12px;">' +
+            '<div class="field">' +
+              '<label class="field-label">Submitted resume override</label>' +
+              '<textarea id="ma-resume" placeholder="Leave blank to keep current resume" style="min-height:72px;"></textarea>' +
+            '</div>' +
+            '<div class="field" style="margin-bottom:0;">' +
+              '<label class="field-label">Submitted cover letter override</label>' +
+              '<textarea id="ma-cover" placeholder="Leave blank to keep current cover letter" style="min-height:72px;"></textarea>' +
+            '</div>' +
+          '</div>' +
+        '</details>' +
+      '</div>' +
+      '<div class="modal-footer">' +
+        '<button onclick="closeModal()">Cancel</button>' +
+        '<button class="primary" onclick="handleMarkAsApplied(' + rowId + ')">Yes, mark as applied</button>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function renderAdContentModal() {
+  const rowId = state.modalData.rowId;
+  const row = state.pipeline.find(function (r) { return r.rowId === rowId; });
+  if (!row) return '';
+  const content = row.adContent || '';
+  // Edit mode: forced on when missing (backfill flow), toggleable otherwise
+  const editMode = state.modalData.editMode || !content;
+  const draft = state.modalData.adContentDraft !== undefined
+    ? state.modalData.adContentDraft
+    : content;
+  const charCount = (draft || '').length;
+  const wordCount = draft ? draft.split(/\s+/).filter(Boolean).length : 0;
+
+  return (
+    '<div class="modal wide">' +
+      '<div class="modal-header">' +
+        '<div>' +
+          '<p class="small-meta" style="text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;font-weight:600;">' +
+            (editMode ? (content ? 'Edit job ad' : 'Add job ad content') : 'Saved job ad') +
+          '</p>' +
+          '<p class="modal-title">' + escapeHtml(row.role || '') + ' · ' + escapeHtml(row.company || '') + '</p>' +
+          '<p class="modal-subtitle">' +
+            (editMode
+              ? (content
+                  ? 'Paste updated ad copy or edit existing. Saved to the pipeline and used by future re-analyses.'
+                  : 'This card was analysed before ad content was captured. Paste the full ad so refresh intel, re-analyse, and doc generation have something to reference.')
+              : 'Captured at analysis time. Source of truth if the original listing is pulled.') +
+          '</p>' +
+        '</div>' +
+        '<button class="modal-close" onclick="closeModal()" aria-label="Close">✕</button>' +
+      '</div>' +
+      '<div style="padding:12px 28px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;align-items:center;">' +
+        (row.url ? '<button class="accent" onclick="openExternal(\'' + escapeAttr(row.url) + '\')">Open original ↗</button>' : '') +
+        (!editMode && content ? '<button onclick="copyToClipboard(' + JSON.stringify(content).replace(/</g, '\\u003c') + ',\'Ad content copied\')">Copy as markdown</button>' : '') +
+        (!editMode && content ? '<button onclick="toggleAdContentEdit(true)">Edit</button>' : '') +
+        (editMode && content ? '<button onclick="toggleAdContentEdit(false)">Cancel edit</button>' : '') +
+        (editMode ? '<span style="margin-left:auto;font-size:11.5px;color:var(--text-ter);">' + charCount + ' chars · ' + wordCount + ' words</span>' : '') +
+      '</div>' +
+      '<div class="ad-content-body">' +
+        (editMode
+          ? '<textarea class="ad-content-editor" oninput="updateAdContentDraft(this.value)" placeholder="Paste the full job ad here. Include role title, responsibilities, requirements, and any selection criteria. Markdown is fine but plain text works too.">' + escapeHtml(draft) + '</textarea>'
+          : (content ? mdToHtml(content) : '<p class="empty-state">No ad content captured for this role.</p>')) +
+      '</div>' +
+      (editMode
+        ? '<div class="modal-footer">' +
+            '<button onclick="closeModal()">Cancel</button>' +
+            '<button class="accent" onclick="saveAdContentFromModal(' + row.rowId + ')">Save ad content</button>' +
+          '</div>'
+        : '') +
+    '</div>'
+  );
+}
+
+function openAdContentModal(rowId) {
+  openModal('adContent', { rowId: rowId });
+}
+
+function toggleAdContentEdit(on) {
+  state.modalData.editMode = !!on;
+  // Reset draft when cancelling so next open starts clean
+  if (!on) state.modalData.adContentDraft = undefined;
+  renderModal();
+}
+
+function updateAdContentDraft(val) {
+  state.modalData.adContentDraft = val;
+  // Don\'t full re-render on every keystroke — just update the char/word
+  // counter text in place so focus stays in the textarea.
+  // Calculate counts
+  const len = (val || '').length;
+  const words = val ? val.split(/\s+/).filter(Boolean).length : 0;
+  // Find the counter span and update it
+  const counter = document.querySelector('.modal .ad-content-body').parentElement
+    .querySelector('div[style*="padding:12px 28px"] span');
+  if (counter) counter.textContent = len + ' chars · ' + words + ' words';
+}
+
+async function saveAdContentFromModal(rowId) {
+  const draft = state.modalData.adContentDraft !== undefined
+    ? state.modalData.adContentDraft
+    : (state.pipeline.find(function (r) { return r.rowId === rowId; }) || {}).adContent || '';
+  if (!draft || !draft.trim()) {
+    toast('Ad content is empty — nothing to save.', 'error');
+    return;
+  }
+  try {
+    const res = await apiPost('saveAdContent', { rowId: rowId, adContent: draft });
+    if (!res.ok) throw new Error(res.error || 'Failed to save');
+    // Optimistic local update so the UI reflects the save without a full reload
+    const row = state.pipeline.find(function (r) { return r.rowId === rowId; });
+    if (row) row.adContent = draft;
+    toast('Ad content saved (' + (res.charCount || draft.length) + ' chars).', 'success');
+    closeModal();
+  } catch (err) {
+    toast('Error: ' + err.message, 'error');
+  }
+}
+
+function renderBatchPasteBackModal() {
+  const action = state.modalData.action;
+  const rowIds = state.modalData.rowIds || [];
+  const rows = state.pipeline.filter(function (r) { return rowIds.indexOf(r.rowId) > -1; });
+  const actionLabels = { analyse: 'Re-analyse', generateDocs: 'Generate docs', interviewPrep: 'Interview prep' };
+  const destinations = {
+    analyse: 'Updates company intel, fit score, key notes and alignments for each card',
+    generateDocs: 'Saves resume + cover letter; moves each card to Ready to Apply',
+    interviewPrep: 'Saves interview prep JSON to each Applied card'
+  };
+  const jobList = rows.map(function (r) {
+    return '<li><strong>rowId=' + r.rowId + '</strong>: ' + escapeHtml(r.role || '') + ' at ' + escapeHtml(r.company || '') + '</li>';
+  }).join('');
+
+  return (
+    '<div class="modal">' +
+      '<div class="modal-header">' +
+        '<div>' +
+          '<p class="small-meta" style="text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;font-weight:600;">Batch ' + actionLabels[action] + '</p>' +
+          '<p class="modal-title">' + rows.length + ' jobs queued</p>' +
+          '<p class="modal-subtitle">Prompt copied. Paste it into Claude, then paste the complete response back here.</p>' +
+        '</div>' +
+        '<button class="modal-close" onclick="closeModal()" aria-label="Close">✕</button>' +
+      '</div>' +
+      '<div class="modal-body">' +
+        '<details style="margin-bottom:16px;"><summary style="cursor:pointer;font-size:12.5px;color:var(--text-ter);">Jobs in this batch (' + rows.length + ')</summary>' +
+          '<ul style="margin:10px 0 0 20px;font-size:12.5px;color:var(--text-sec);">' + jobList + '</ul>' +
+        '</details>' +
+        '<p class="section-title">Paste full response from Claude</p>' +
+        '<div class="field" style="margin:0;">' +
+          '<textarea id="batch-paste-response" class="mono" placeholder="Paste the complete response containing all <<< RESULT rowId=N >>> blocks..." style="min-height:240px;"></textarea>' +
+        '</div>' +
+        '<p class="small-meta" style="margin-top:10px;">' + destinations[action] + '</p>' +
+      '</div>' +
+      '<div class="modal-footer">' +
+        '<button onclick="closeModal()">Cancel</button>' +
+        '<button class="primary" onclick="handleBatchPasteSubmit()">Save all</button>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function mdToHtml(md) {
+  if (!md) return '';
+  const lines = String(md).split('\n');
+  const out = [];
+  let inList = false;
+  function closeList() { if (inList) { out.push('</ul>'); inList = false; } }
+  function inline(s) {
+    s = escapeHtml(s);
+    s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
+    return s;
+  }
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    if (!trimmed) { closeList(); continue; }
+    let m;
+    if ((m = trimmed.match(/^###\s+(.*)$/))) { closeList(); out.push('<h4>' + inline(m[1]) + '</h4>'); continue; }
+    if ((m = trimmed.match(/^##\s+(.*)$/)))  { closeList(); out.push('<h3>' + inline(m[1]) + '</h3>'); continue; }
+    if ((m = trimmed.match(/^#\s+(.*)$/)))   { closeList(); out.push('<h2>' + inline(m[1]) + '</h2>'); continue; }
+    if ((m = trimmed.match(/^[-*]\s+(.*)$/))) {
+      if (!inList) { out.push('<ul>'); inList = true; }
+      out.push('<li>' + inline(m[1]) + '</li>');
+      continue;
+    }
+    closeList();
+    out.push('<p>' + inline(trimmed) + '</p>');
+  }
+  closeList();
+  return out.join('\n');
+}
+
+function renderConfirmArchiveModal() {
+  const rowId = state.modalData.rowId;
+  const row = state.pipeline.find(function (r) { return r.rowId === rowId; });
+  if (!row) return '';
+
+  const wasApplied = hasBeenApplied(row);
+  const title = wasApplied ? 'Close this application?' : 'Archive this job?';
+
+  // Context-aware body: for applied cards, spell out what happens; for
+  // pre-applied cards, it's a lower-stakes "not pursuing" signal.
+  const bodyText = wasApplied
+    ? 'This will move the card to Archive. The application journey is final after this — ' +
+      'it can\'t be moved back to Applied or Interviewing. All history stays intact.'
+    : 'This will close the card without applying. You can restore it later via the hold dropdown ' +
+      'if you change your mind.';
+
+  const warningBlock = wasApplied
+    ? '<div style="background:var(--warning-soft);border:1px solid var(--warning);border-radius:var(--r-md);padding:10px 12px;margin-bottom:14px;font-size:12.5px;color:var(--warning-text);line-height:1.5;">' +
+        '<strong>Final step.</strong> Once archived, the journey is closed. Status history stays visible in the card for reference.' +
+      '</div>'
+    : '';
+
+  // Button set differs by stage. Pre-applied cards only ever get ONE
+  // archive option: "Not pursuing" (writes Withdrawn). You can\'t be
+  // rejected before applying, so Rejected isn\'t an option here.
+  // Post-applied cards get TWO options with unambiguous labels:
+  //   - "They rejected me" → writes Rejected (their decision)
+  //   - "I withdrew my application" → writes Withdrawn (your decision)
+  // The semantic distinction matters because Rejected cards that
+  // reached Interviewing route to Engagement; Withdrawn always archives.
+  const buttonsHtml = wasApplied
+    ? '<div style="display:flex;gap:10px;">' +
+        '<button class="danger" style="flex:1;" onclick="handleArchive(' + rowId + ',\'Rejected\')">They rejected me</button>' +
+        '<button style="flex:1;" onclick="handleArchive(' + rowId + ',\'Withdrawn\')">I withdrew my application</button>' +
+      '</div>'
+    : '<button class="danger" style="width:100%;" onclick="handleArchive(' + rowId + ',\'Withdrawn\')">Not pursuing</button>';
+
+  return (
+    '<div class="modal" style="max-width:460px;">' +
+      '<div class="modal-header">' +
+        '<div>' +
+          '<p class="modal-title">' + title + '</p>' +
+          '<p class="modal-subtitle">' + escapeHtml(row.role) + ' · ' + escapeHtml(row.company) + '</p>' +
+        '</div>' +
+        '<button class="modal-close" onclick="closeModal()" aria-label="Close">✕</button>' +
+      '</div>' +
+      '<div class="modal-body">' +
+        warningBlock +
+        '<p style="font-size:13.5px;margin-bottom:16px;color:var(--text-sec);line-height:1.55;">' + bodyText + '</p>' +
+        buttonsHtml +
+      '</div>' +
+      '<div class="modal-footer">' +
+        '<button onclick="closeModal()">Cancel</button>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+/**
+ * Confirm before re-analysing. Re-analysing overwrites fit score,
+ * recommendation, key notes, alignments, concerns, priority, pitch,
+ * personal angle and company intel. Useful for stale rows, dangerous
+ * for cards you've already committed to — the new fit score might
+ * contradict a decision you've already made.
+ */
+function renderConfirmRefreshIntelModal() {
+  const rowId = state.modalData.rowId;
+  const row = state.pipeline.find(function (r) { return r.rowId === rowId; });
+  if (!row) return '';
+  const isCommitted = ['Applied', 'Interviewing', 'Interviewed', 'Offer', 'Accepted'].indexOf(row.status) > -1;
+  const extraWarning = isCommitted
+    ? '<p style="font-size:12.5px;color:var(--warning-text);background:var(--warning-soft);border:1px solid var(--warning);border-radius:var(--r-md);padding:10px 12px;margin:0 0 16px;line-height:1.5;"><strong>Heads up:</strong> you\'ve already applied to this role. A new fit score may contradict that decision. Refreshing company intel is still useful for interview prep, but consider whether the fit score update matters here.</p>'
+    : '';
+
+  return (
+    '<div class="modal" style="max-width:480px;">' +
+      '<div class="modal-header">' +
+        '<div>' +
+          '<p class="modal-title">Refresh intel?</p>' +
+          '<p class="modal-subtitle">' + escapeHtml(row.role || '') + ' · ' + escapeHtml(row.company || '') + '</p>' +
+        '</div>' +
+        '<button class="modal-close" onclick="closeModal()" aria-label="Close">✕</button>' +
+      '</div>' +
+      '<div class="modal-body">' +
+        extraWarning +
+        '<p style="font-size:13.5px;margin:0 0 10px;color:var(--text-sec);line-height:1.55;">This copies a fresh analyse prompt to your clipboard. When you paste Claude\'s response back, it will <strong>overwrite</strong>:</p>' +
+        '<ul style="font-size:12.5px;color:var(--text-sec);margin:0 0 14px 20px;line-height:1.7;">' +
+          '<li>Fit score &amp; recommendation</li>' +
+          '<li>Key notes, alignments, concerns</li>' +
+          '<li>Application priority, tailored pitch, personal angle</li>' +
+          '<li>Company intel JSON (industry, positioning, competitors, etc.)</li>' +
+        '</ul>' +
+        '<p style="font-size:12.5px;color:var(--text-ter);margin:0;">Your notes, submitted docs, interview prep, and application status are untouched.</p>' +
+      '</div>' +
+      '<div class="modal-footer">' +
+        '<button onclick="closeModal()">Cancel</button>' +
+        '<button class="primary" onclick="handleRefreshIntelConfirm(' + rowId + ')">Yes, refresh intel</button>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+/**
+ * Edit journey modal — full list of status entries with date inputs and
+ * a per-row Remove button. "Add status" appends a blank row. Drag-reorder
+ * is not supported (keep it simple: users can delete and re-add to fix
+ * ordering issues).
+ *
+ * Draft state is held in state.editJourneyDraft, scoped by rowId, so the
+ * user's typing survives a modal re-render (which happens on every
+ * add/remove). Save replaces the sheet's history wholesale.
+ */
+function renderEditJourneyModal() {
+  const rowId = state.modalData.rowId;
+  const row = state.pipeline.find(function (r) { return r.rowId === rowId; });
+  if (!row) return '';
+
+  const draft = state.editJourneyDraft || [];
+  const allStatuses = STATUSES.map(function (s) { return s.val; });
+
+  const rowsHtml = draft.length
+    ? draft.map(function (entry, i) {
+        const statusOptions = allStatuses.map(function (s) {
+          return '<option value="' + escapeAttr(s) + '"' + (s === entry.status ? ' selected' : '') + '>' + escapeHtml(s) + '</option>';
+        }).join('');
+        // Convert ISO to local datetime-local value
+        const dtValue = entry.at ? isoToLocalDateTime(entry.at) : '';
+        return (
+          '<div class="journey-edit-row">' +
+            '<span class="journey-edit-index">' + (i + 1) + '.</span>' +
+            '<select onchange="updateEditJourneyField(' + i + ',\'status\',this.value)">' + statusOptions + '</select>' +
+            '<input type="datetime-local" value="' + dtValue + '" onchange="updateEditJourneyField(' + i + ',\'at\',this.value)" />' +
+            '<button class="small ghost danger" onclick="removeEditJourneyRow(' + i + ')" title="Remove">✕</button>' +
+          '</div>'
+        );
+      }).join('')
+    : '<p class="small-meta" style="font-style:italic;padding:16px 0;text-align:center;">No entries yet. Click "Add status" below to start building the journey.</p>';
+
+  return (
+    '<div class="modal wide">' +
+      '<div class="modal-header">' +
+        '<div>' +
+          '<p class="modal-title">Edit journey</p>' +
+          '<p class="modal-subtitle">' + escapeHtml(row.role || '') + ' · ' + escapeHtml(row.company || '') + '</p>' +
+        '</div>' +
+        '<button class="modal-close" onclick="closeModal()" aria-label="Close">✕</button>' +
+      '</div>' +
+      '<div class="modal-body">' +
+        '<p class="small-meta" style="margin-bottom:14px;line-height:1.5;">' +
+          'Edit the status history for this card. Entries appear in order top-to-bottom (oldest first). The last entry becomes the card\'s current status.' +
+        '</p>' +
+        '<div class="journey-edit-list">' + rowsHtml + '</div>' +
+        '<button class="small" style="margin-top:12px;" onclick="addEditJourneyRow()">+ Add status</button>' +
+      '</div>' +
+      '<div class="modal-footer">' +
+        '<button onclick="closeModal()">Cancel</button>' +
+        '<button class="primary" onclick="handleSaveJourney(' + rowId + ')">Save journey</button>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+/**
+ * Convert an ISO datetime string to the format expected by HTML
+ * datetime-local inputs (YYYY-MM-DDTHH:MM, in local time).
+ * Returns empty string if input is invalid.
+ */
+function isoToLocalDateTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const pad = function (n) { return String(n).padStart(2, '0'); };
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+         'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+
+function openEditJourneyModal(rowId) {
+  const row = state.pipeline.find(function (r) { return r.rowId === rowId; });
+  if (!row) return;
+  // Deep-copy the existing history into the draft so edits are isolated
+  // until Save. JSON round-trip is fine for this shape.
+  state.editJourneyDraft = row.statusHistory
+    ? JSON.parse(JSON.stringify(row.statusHistory))
+    : [];
+  openModal('editJourney', { rowId: rowId });
+}
+
+function updateEditJourneyField(index, field, value) {
+  if (!state.editJourneyDraft || !state.editJourneyDraft[index]) return;
+  if (field === 'at') {
+    // Convert local datetime-local string back to ISO. Empty = null.
+    state.editJourneyDraft[index].at = value ? new Date(value).toISOString() : null;
+  } else {
+    state.editJourneyDraft[index][field] = value;
+  }
+  // No re-render — input's own value change is sufficient
+}
+
+function addEditJourneyRow() {
+  if (!Array.isArray(state.editJourneyDraft)) state.editJourneyDraft = [];
+  state.editJourneyDraft.push({ status: 'Analysed', at: new Date().toISOString() });
+  renderModal();
+}
+
+function removeEditJourneyRow(index) {
+  if (!state.editJourneyDraft) return;
+  state.editJourneyDraft.splice(index, 1);
+  renderModal();
+}
+
+async function handleSaveJourney(rowId) {
+  const draft = state.editJourneyDraft || [];
+  try {
+    const res = await apiPost('saveStatusHistory', {
+      rowId: rowId,
+      historyJson: JSON.stringify(draft)
+    });
+    if (!res.ok) throw new Error(res.error || 'Failed to save journey');
+    toast('Journey saved', 'success');
+    state.editJourneyDraft = null;
+    closeModal();
+    await refreshAll();
+  } catch (err) {
+    toast('Error: ' + err.message, 'error');
+  }
+}
+
+/* ============================================================
+   BATCH UPDATE JOURNEY
+   ============================================================ */
+
+const BATCH_JOURNEY_STATUSES = [
+  'Sourced', 'Analysed', 'Ready to Apply', 'Applied',
+  'Interviewing', 'Interviewed', 'Offer', 'Accepted',
+  'Rejected', 'Withdrawn'
+];
+
+/**
+ * Modal for batch-updating journey on multiple selected cards. The user
+ * builds a template of {status, date} pairs (dynamically — start with one
+ * row, can add or remove rows). On save, the template is merge-applied to
+ * each selected card via the batchUpdateJourney backend endpoint.
+ *
+ * The smart merge logic: if a card already has a journey entry for a given
+ * status, its DATE gets updated to match the template (backdate fix). If
+ * the card doesn\'t have that status, the entry is added. Existing entries
+ * for statuses not in the template are left untouched.
+ *
+ * Draft template lives on state.batchJourneyDraft so it persists through
+ * re-renders when adding/removing rows.
+ */
+function renderBatchUpdateJourneyModal() {
+  const rowIds = state.modalData.rowIds || [];
+  if (!rowIds.length) return '';
+
+  // Initialise draft if not present — start with a single empty Applied row
+  // dated today, since "I just applied to all of these" is the most common
+  // batch use case.
+  if (!state.batchJourneyDraft) {
+    const today = new Date().toISOString().slice(0, 16);  // YYYY-MM-DDTHH:MM
+    state.batchJourneyDraft = [{ status: 'Applied', at: today }];
+  }
+  const draft = state.batchJourneyDraft;
+
+  // Card preview chips — first 8 + "and N more" if there are more.
+  const previewIds = rowIds.slice(0, 8);
+  const previewChips = previewIds.map(function (id) {
+    const r = state.pipeline.find(function (p) { return p.rowId === id; });
+    if (!r) return '';
+    return '<span class="batch-card-chip">' + escapeHtml(r.role || '?') + ' · ' + escapeHtml(r.company || '?') + '</span>';
+  }).join('');
+  const overflowChip = rowIds.length > 8
+    ? '<span class="batch-card-chip batch-card-chip-more">+ ' + (rowIds.length - 8) + ' more</span>'
+    : '';
+
+  const rowsHtml = draft.map(function (entry, i) {
+    const opts = BATCH_JOURNEY_STATUSES.map(function (s) {
+      return '<option value="' + s + '"' + (entry.status === s ? ' selected' : '') + '>' + s + '</option>';
+    }).join('');
+    return (
+      '<div class="batch-journey-row">' +
+        '<select onchange="updateBatchJourneyDraft(' + i + ', \'status\', this.value)">' + opts + '</select>' +
+        '<input type="datetime-local" value="' + escapeAttr(entry.at || '') + '" onchange="updateBatchJourneyDraft(' + i + ', \'at\', this.value)" />' +
+        (draft.length > 1
+          ? '<button class="ghost icon-only" onclick="removeBatchJourneyRow(' + i + ')" title="Remove this entry">✕</button>'
+          : '<span class="batch-journey-placeholder"></span>') +
+      '</div>'
+    );
+  }).join('');
+
+  return (
+    '<div class="modal" style="max-width:560px;">' +
+      '<div class="modal-header">' +
+        '<div>' +
+          '<p class="modal-title">Update journey for ' + rowIds.length + ' card' + (rowIds.length === 1 ? '' : 's') + '</p>' +
+          '<p class="modal-subtitle">Build a status template. Existing entries get their dates updated; missing ones get added.</p>' +
+        '</div>' +
+        '<button class="modal-close" onclick="closeModal()" aria-label="Close">✕</button>' +
+      '</div>' +
+      '<div class="modal-body">' +
+        '<div class="batch-card-preview">' + previewChips + overflowChip + '</div>' +
+        '<div class="batch-journey-list">' + rowsHtml + '</div>' +
+        '<button class="ghost" style="margin-top:10px;" onclick="addBatchJourneyRow()">+ Add status entry</button>' +
+        '<div class="batch-journey-help">' +
+          '<strong>How merging works:</strong>' +
+          '<ul>' +
+            '<li>If a card doesn\'t have that status in its journey, it\'s added with this date</li>' +
+            '<li>If a card already has that status, its existing entry gets backdated to this date</li>' +
+            '<li>Existing entries for statuses you don\'t list here stay untouched</li>' +
+            '<li>The card\'s current status syncs to whichever entry has the latest date</li>' +
+          '</ul>' +
+        '</div>' +
+      '</div>' +
+      '<div class="modal-footer">' +
+        '<button onclick="closeBatchJourneyModal()">Cancel</button>' +
+        '<button class="primary" onclick="handleBatchUpdateJourney()">Apply to ' + rowIds.length + ' card' + (rowIds.length === 1 ? '' : 's') + '</button>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function updateBatchJourneyDraft(index, field, value) {
+  if (!state.batchJourneyDraft || !state.batchJourneyDraft[index]) return;
+  state.batchJourneyDraft[index][field] = value;
+  // No re-render needed — the input retains its value natively.
+}
+
+function addBatchJourneyRow() {
+  if (!state.batchJourneyDraft) state.batchJourneyDraft = [];
+  const today = new Date().toISOString().slice(0, 16);
+  // Default new row to a status not already in the draft, falling back
+  // to "Interviewing" if all options are taken (unlikely with 9 statuses).
+  const used = state.batchJourneyDraft.map(function (e) { return e.status; });
+  const next = BATCH_JOURNEY_STATUSES.find(function (s) { return used.indexOf(s) === -1; }) || 'Interviewing';
+  state.batchJourneyDraft.push({ status: next, at: today });
+  renderModal();
+}
+
+function removeBatchJourneyRow(index) {
+  if (!state.batchJourneyDraft) return;
+  state.batchJourneyDraft.splice(index, 1);
+  renderModal();
+}
+
+function closeBatchJourneyModal() {
+  state.batchJourneyDraft = null;
+  closeModal();
+}
+
+async function handleBatchUpdateJourney() {
+  const rowIds = state.modalData.rowIds || [];
+  const draft = state.batchJourneyDraft || [];
+
+  if (!rowIds.length) { toast('No cards selected', 'error'); return; }
+  if (!draft.length)  { toast('Add at least one status entry to the template', 'error'); return; }
+
+  // Validate all rows have both status and date
+  for (var i = 0; i < draft.length; i++) {
+    if (!draft[i].status) { toast('Row ' + (i + 1) + ' is missing a status', 'error'); return; }
+    if (!draft[i].at)     { toast('Row ' + (i + 1) + ' (' + draft[i].status + ') is missing a date', 'error'); return; }
+  }
+
+  // Check for duplicate statuses in the template — wouldn\'t error backend
+  // (last entry wins) but it\'s almost certainly a user mistake worth catching.
+  const statuses = draft.map(function (e) { return e.status; });
+  const dupes = statuses.filter(function (s, i) { return statuses.indexOf(s) !== i; });
+  if (dupes.length) {
+    toast('Duplicate status in template: ' + dupes[0] + '. Each status can only appear once.', 'error');
+    return;
+  }
+
+  try {
+    console.log('[batchUpdateJourney] sending', { rowIds: rowIds, template: draft });
+    const res = await apiPost('batchUpdateJourney', {
+      rowIds: rowIds,
+      template: draft
+    });
+    console.log('[batchUpdateJourney] response', res);
+    if (!res.ok) throw new Error(res.error || 'Batch update failed');
+
+    state.batchJourneyDraft = null;
+    closeModal();
+    exitBatchMode();
+
+    const msg = res.skipped > 0
+      ? 'Updated ' + res.updated + ' card' + (res.updated === 1 ? '' : 's') + ', skipped ' + res.skipped
+      : 'Updated ' + res.updated + ' card' + (res.updated === 1 ? '' : 's');
+    toast(msg, 'success');
+
+    await refreshAll();
+  } catch (err) {
+    console.error('[batchUpdateJourney] error', err);
+    toast('Error: ' + err.message, 'error');
+  }
+}
+
+/* ============================================================
+   ACTIONS
+   ============================================================ */
+
+/**
+ * Open a modal. If another modal is already open, push it onto the stack
+ * so closing this one returns to it. Pass `replace: true` in opts to
+ * REPLACE the current modal instead of stacking — used when one modal
+ * fully transitions to another (rare; we mostly want stacking).
+ *
+ * Pass `topLevel: true` to clear the stack — used when a card-row click
+ * opens a fresh detail modal that shouldn\'t inherit any prior context.
+ */
+function openModal(which, data, opts) {
+  opts = opts || {};
+  if (opts.topLevel) {
+    state.modalStack = [];
+  } else if (state.modalOpen && !opts.replace) {
+    // Push current modal onto stack so closeModal can pop back
+    state.modalStack.push({
+      modalOpen: state.modalOpen,
+      modalData: state.modalData,
+      selectedTab: state.selectedTab
+    });
+  }
+  state.modalOpen = which;
+  state.modalData = data || {};
+  renderModal();
+}
+
+/**
+ * Close the current modal. If a parent modal is on the stack, pop back
+ * to it instead of dumping the user to the pipeline. Outcome popover is
+ * always cleared on close regardless.
+ */
+function closeModal() {
+  if (state.outcomePopover) state.outcomePopover = null;
+  if (state.modalStack && state.modalStack.length) {
+    const parent = state.modalStack.pop();
+    state.modalOpen = parent.modalOpen;
+    state.modalData = parent.modalData;
+    if (parent.selectedTab !== undefined) state.selectedTab = parent.selectedTab;
+  } else {
+    state.modalOpen = null;
+    state.modalData = {};
+  }
+  renderModal();
+  renderPopovers();
+}
+
+function toggleCardSelection(rowId) {
+  if (!state.batchMode) return;
+  if (state.selectedRowIds[rowId]) delete state.selectedRowIds[rowId];
+  else state.selectedRowIds[rowId] = true;
+  render();
+}
+
+function openCardDetail(rowId) {
+  state.selectedRowId = rowId;
+  // Clear any previously-selected tab so getDefaultTabForRow picks the
+  // correct next-action tab for this card\'s current state. The unified
+  // tab system handles all default routing — no per-stage logic here.
+  state.selectedTab = null;
+  openModal('cardDetail', { rowId: rowId }, { topLevel: true });
+} 
+
+function enterBatchMode(action) {
+  state.batchMode = action;
+  state.selectedRowIds = {};
+  closeBatchMenu();
+  render();
+}
+
+function toggleBatchMenu(ev) {
+  ev.stopPropagation();
+  // Both desktop and mobile share the .batch-menu wrapper. Toggle the
+  // dropdown that belongs to the button that was clicked — finds the
+  // dropdown within the same .batch-menu parent.
+  const trigger = ev.currentTarget || ev.target;
+  const wrap = trigger.closest ? trigger.closest('.batch-menu') : null;
+  const dd = wrap ? wrap.querySelector('.batch-menu-dropdown') : document.getElementById('batch-menu-dropdown');
+  if (!dd) return;
+  dd.classList.toggle('open');
+  if (dd.classList.contains('open')) {
+    setTimeout(function () { document.addEventListener('click', closeBatchMenuOnce, { once: true }); }, 0);
+  }
+}
+function closeBatchMenu() {
+  document.querySelectorAll('.batch-menu-dropdown.open').forEach(function (dd) {
+    dd.classList.remove('open');
+  });
+}
+function closeBatchMenuOnce() { closeBatchMenu(); }
+
+function exitBatchMode() { state.batchMode = null; state.selectedRowIds = {}; render(); }
+function clearBatchSelection() { state.selectedRowIds = {}; render(); }
+function getSelectedRowIds() { return Object.keys(state.selectedRowIds).map(function (k) { return parseInt(k, 10); }); }
+function selectCard(rowId) { openCardDetail(rowId); }
+
+function setTab(tab) { state.selectedTab = tab; if (state.modalOpen === 'cardDetail') renderModal(); else render(); }
+function setPrepFilter(filter) { state.filterPrep = filter; if (state.modalOpen === 'cardDetail') renderModal(); else render(); }
+function toggleAngles(rowId) { const k = 'row' + rowId; state.showAngles[k] = !state.showAngles[k]; if (state.modalOpen === 'cardDetail') renderModal(); else render(); }
+function toggleQuestion(key) { state.expandedQuestions[key] = !state.expandedQuestions[key]; if (state.modalOpen === 'cardDetail') renderModal(); else render(); }
+function togglePreviousRounds(key) { state.showPreviousRounds[key] = !state.showPreviousRounds[key]; if (state.modalOpen === 'cardDetail') renderModal(); else render(); }
+function toggleHolding(column) { state.holdingCollapsed[column] = !state.holdingCollapsed[column]; render(); }
+function toggleArchive() { state.archiveExpanded = !state.archiveExpanded; render(); }
+
+async function copyPromptFromApi(type, rowId, successMsg) {
+  try {
+    const params = { type: type };
+    if (rowId) params.rowId = rowId;
+    const res = await apiGet('getPrompt', params);
+    if (!res.ok) throw new Error(res.error || 'Failed to build prompt');
+    await copyToClipboard(res.prompt, successMsg || 'Prompt copied');
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+function copyAnalysePrompt() { copyPromptFromApi('analyse', null, 'Analyse prompt copied — paste into Claude'); }
+
+/**
+ * Dev prompt — copied to clipboard for pasting into a fresh Claude chat
+ * in the same project. Bundles the repo location, file URLs, and the
+ * deploy workflow so the new chat starts with full context. Louie just
+ * fills in the change he wants at the bottom.
+ */
+function copyDevPrompt() {
+  const prompt = [
+    'I want to make tech changes to my Job Pipeline Dashboard.',
+    '',
+    'Repo: github.com/louie-redbird/job-pipeline-dashboard (private)',
+    'Local: ~/Projects/job-pipeline-dashboard',
+    '',
+    'Please fetch the latest Code.gs and Index.html from:',
+    '- https://raw.githubusercontent.com/louie-redbird/job-pipeline-dashboard/refs/heads/main/Code.gs',
+    '- https://raw.githubusercontent.com/louie-redbird/job-pipeline-dashboard/refs/heads/main/Index.html',
+    '',
+    'Workflow reminder: edit locally → commit → push to GitHub → paste into Apps Script → new deployment → update GoDaddy iframe src at jobs.redbirdagency.com.au with new /exec URL.',
+    '',
+    'What I want to change:',
+    '[describe here]'
+  ].join('\n');
+  copyToClipboard(prompt, 'Dev prompt copied — paste into a new chat in the project');
+}
+
+function copyGenerateDocsPrompt(rowId) {
+  copyPromptFromApi('generateDocs', rowId, 'Generate docs prompt copied');
+  setTimeout(function () { openModal('phase1PasteBack', { rowId: rowId }); }, 300);
+}
+function copyInterviewPrepPrompt(rowId) {
+  copyPromptFromApi('interviewPrep', rowId, 'Interview prep prompt copied');
+  setTimeout(function () { openModal('interviewPrepPasteBack', { rowId: rowId }); }, 300);
+}
+function copyContinuePracticePrompt(rowId) { copyPromptFromApi('continuePractice', rowId, 'Continue practice prompt copied'); }
+
+/**
+ * Single-card "Refresh intel" — reuses the batch analyse infrastructure
+ * with rowIds=[rowId]. Prompt builder is batchAnalyse (which handles any
+ * N including 1); paste-back goes through batchSaveAnalyse which writes
+ * updated company intel, fit score, alignments etc back to the row.
+ * Works from any stage, including Applied, so you can refresh intel on
+ * a job ad you've already submitted to.
+ */
+/**
+ * Single-card "Refresh intel" — reuses the batch analyse infrastructure
+ * with rowIds=[rowId]. Prompt builder is batchAnalyse (which handles any
+ * N including 1); paste-back goes through batchSaveAnalyse which writes
+ * updated company intel, fit score, alignments etc back to the row.
+ * Works from any stage, including Applied, so you can refresh intel on
+ * a job ad you've already submitted to.
+ *
+ * Two-step flow: refreshIntel() opens a confirm modal (because this
+ * overwrites fit score + all analysis fields), handleRefreshIntelConfirm()
+ * runs the actual copy+paste-back once the user confirms.
+ */
+function refreshIntel(rowId) {
+  const row = state.pipeline.find(function (r) { return r.rowId === rowId; });
+  // If the card has no ad content (old cards pre-dating the capture column),
+  // refreshing intel would produce garbage because the prompt has nothing
+  // to analyse. Redirect to the edit modal first with a helpful toast.
+  if (row && !row.adContent) {
+    toast('Add the ad content first — refresh intel needs something to read.', 'error');
+    openAdContentModal(rowId);
+    return;
+  }
+  openModal('confirmRefreshIntel', { rowId: rowId });
+}
+
+async function handleRefreshIntelConfirm(rowId) {
+  closeModal();
+  try {
+    const res = await apiGet('getPrompt', { type: 'batchAnalyse', rowIds: String(rowId) });
+    if (!res.ok) throw new Error(res.error || 'Failed to build prompt');
+    await copyToClipboard(res.prompt, 'Refresh intel prompt copied');
+    openModal('batchPasteBack', { action: 'analyse', rowIds: [rowId] });
+  } catch (err) {
+    toast('Error: ' + err.message, 'error');
+  }
+}
+
+async function handleBatchPasteSubmit() {
+  const action = state.modalData.action;
+  const textarea = document.getElementById('batch-paste-response');
+  const response = textarea ? textarea.value.trim() : '';
+  if (!response) { toast('Paste the response first', 'error'); return; }
+  const actionMap = { analyse: 'batchSaveAnalyse', generateDocs: 'batchSaveGenerateDocs', interviewPrep: 'batchSaveInterviewPrep' };
+  try {
+    const res = await apiPost(actionMap[action], { response: response });
+    if (!res.ok) throw new Error(res.error || 'Batch save failed');
+    const savedN = (res.saved || []).length;
+    const skippedN = (res.skipped || []).length;
+    let msg = 'Saved ' + savedN;
+    if (skippedN) msg += ', ' + skippedN + ' skipped (parse errors)';
+    toast(msg, savedN ? 'success' : 'error');
+    if (skippedN && res.skipped) console.warn('Batch skipped rows:', res.skipped);
+    clearBatchSelection();
+    exitBatchMode();
+    closeModal();
+    await refreshAll();
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+async function copyToClipboard(text, successMsg) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast(successMsg || 'Copied', 'success');
+  } catch (err) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); toast(successMsg || 'Copied', 'success'); }
+    catch (e) { toast('Copy failed — please copy manually', 'error'); }
+    document.body.removeChild(ta);
+  }
+}
+
+async function handleAddToQueue(force) {
+  const content = document.getElementById('intake-content').value.trim();
+  const url = document.getElementById('intake-url').value.trim();
+  if (!content || !url) { toast('Content and URL are both required', 'error'); return; }
+  try {
+    const body = { content: content, url: url };
+    if (force === true) body.force = true;
+    const res = await apiPost('addToQueue', body);
+
+    // Smart duplicate detection — backend returns ok:false + duplicate:true
+    // when the URL already exists in the pipeline or queue. Show the user
+    // what they\'d be duplicating, then let them confirm-and-override or back out.
+    if (!res.ok && res.duplicate) {
+      const ex = res.existing || {};
+      let detail;
+      if (res.location === 'pipeline') {
+        const dateStr = ex.dateAdded ? ' on ' + new Date(ex.dateAdded).toLocaleDateString('en-AU') : '';
+        detail = 'Already in your pipeline as "' + (ex.role || 'Untitled') + ' at ' +
+                 (ex.company || 'Unknown') + '" (' + (ex.status || '?') + ')' + dateStr + '.';
+      } else {
+        detail = 'Already in your intake queue waiting to be analysed.';
+      }
+      const ok = confirm(detail + '\n\nAdd it again anyway?');
+      if (ok) {
+        await handleAddToQueue(true);  // recurse with force flag
+      }
+      return;
+    }
+
+    if (!res.ok) throw new Error(res.error || 'Failed to add to queue');
+    state.queue = res.queue || [];
+    state.queueCount = state.queue.length;
+    document.getElementById('intake-content').value = '';
+    document.getElementById('intake-url').value = '';
+    toast('Added to queue', 'success');
+    renderModal();
+    render();
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+async function handleRemoveFromQueue(queueId) {
+  try {
+    const res = await apiPost('removeFromQueue', { queueId: queueId });
+    if (!res.ok) throw new Error(res.error || 'Failed to remove');
+    state.queue = res.queue || [];
+    state.queueCount = state.queue.length;
+    toast('Removed from queue', 'success');
+    renderModal();
+    render();
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+async function handleClearQueue() {
+  if (!confirm('Clear all queued jobs? This cannot be undone.')) return;
+  try {
+    const res = await apiPost('clearQueue', {});
+    if (!res.ok) throw new Error(res.error || 'Failed to clear');
+    state.queue = []; state.queueCount = 0;
+    toast('Queue cleared', 'success');
+    renderModal(); render();
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+async function handleBatchAppend() {
+  let tsv = document.getElementById('intake-tsv').value.trim();
+  if (!tsv) { toast('Paste TSV first', 'error'); return; }
+  tsv = tsv.replace(/<\/?tsv>/g, '').trim();
+  try {
+    const res = await apiPost('batchAppendAnalysed', { tsv: tsv });
+    if (!res.ok) throw new Error(res.error || 'Failed to save');
+    toast('Saved ' + (res.count || 0) + ' jobs to pipeline', 'success');
+    closeModal();
+    await refreshAll();
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+/**
+ * Phase 1 save: sends Google Doc LINKS only.
+ * The content textareas were removed 23-Apr-2026 — the Google Doc is the
+ * source of truth, mirroring markdown in the sheet was pure redundancy.
+ */
+async function handleSavePhase1Docs(rowId) {
+  const coverLink  = document.getElementById('p1-cover-link').value.trim();
+  const resumeLink = document.getElementById('p1-resume-link').value.trim();
+
+  if (!coverLink || !resumeLink) {
+    toast('Both Google Doc links are required', 'error');
+    return;
+  }
+
+  try {
+    const res = await apiPost('savePhase1Docs', {
+      rowId: rowId,
+      coverLetterLink: coverLink,
+      resumeLink: resumeLink
+    });
+    if (!res.ok) throw new Error(res.error || 'Failed to save');
+    toast('Saved and moved to Ready to apply', 'success');
+    closeModal();
+    await refreshAll();
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+async function handleMarkAsApplied(rowId) {
+  const resumeEl = document.getElementById('ma-resume');
+  const coverEl  = document.getElementById('ma-cover');
+  const body = {
+    rowId: rowId,
+    submittedResumeContent:      resumeEl ? resumeEl.value : '',
+    submittedCoverLetterContent: coverEl  ? coverEl.value  : '',
+    appliedVia:                  document.getElementById('ma-via').value,
+    applicationDate:             document.getElementById('ma-date').value
+  };
+  try {
+    const res = await apiPost('markAsApplied', body);
+    if (!res.ok) throw new Error(res.error || 'Failed to save');
+    toast('Marked as applied', 'success');
+    closeModal();
+    await refreshAll();
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+async function updateStatus(rowId, newStatus, successMsg) {
+  try {
+    const res = await apiPost('updateCardStatus', { rowId: rowId, newStatus: newStatus });
+    if (!res.ok) throw new Error(res.error || 'Failed to update');
+    toast(successMsg || 'Status updated', 'success');
+    await refreshAll();
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+function handleHoldChange(rowId, value) {
+  if (!value) return;
+  if (value === '__restore') {
+    const row = state.pipeline.find(function (r) { return r.rowId === rowId; });
+    if (!row) return;
+    let targetStatus = 'Analysed';
+    if (row.resumeMd && row.coverLetterMd) targetStatus = 'Ready to Apply';
+    if (row.applicationDate) targetStatus = 'Applied';
+    updateStatus(rowId, targetStatus, 'Moved back to ' + targetStatus);
+    return;
+  }
+  updateStatus(rowId, value, 'Moved to ' + value);
+}
+
+function handleOutcomeChange(rowId, value) {
+  if (!value) return;
+  updateStatus(rowId, value, 'Logged outcome: ' + value);
+}
+
+function confirmArchive(rowId) { openModal('confirmArchive', { rowId: rowId }); }
+function handleArchive(rowId, reason) { closeModal(); updateStatus(rowId, reason, 'Archived as ' + reason); }
+function moveToAnalysed(rowId) { updateStatus(rowId, 'Analysed', 'Restored to Analysed'); }
+
+async function markQuestionNailed(rowId, qId) {
+  const row = state.pipeline.find(function (r) { return r.rowId === rowId; });
+  if (!row || !row.interviewPrep) return;
+  const prep = JSON.parse(JSON.stringify(row.interviewPrep));
+  prep.questions = prep.questions.map(function (q) { if (q.id === qId) q.status = 'nailed'; return q; });
+  try {
+    const res = await apiPost('saveInterviewPrep', { rowId: rowId, interviewPrepJson: JSON.stringify(prep) });
+    if (!res.ok) throw new Error(res.error || 'Failed to save');
+    toast('Marked as nailed', 'success');
+    await refreshAll();
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+function openDocModal(rowId, docType) { openModal(docType === 'resume' ? 'openResume' : 'openCoverLetter', { rowId: rowId }); }
+function openJobAd(url) { if (!url) { toast('No URL for this job', 'error'); return; } window.open(url, '_blank', 'noopener'); }
+function openExternal(url) { if (!url) { toast('No URL', 'error'); return; } window.open(url, '_blank', 'noopener'); }
+
+/* ============================================================
+   UTILITIES
+   ============================================================ */
+
+function countByColumn() {
+  // Three counts:
+  //   active  = in-flight but no-one\'s engaged yet (Potential + Applied)
+  //   engaged = someone\'s engaged with you (Interviewing through Accepted)
+  //   holding = paused (Unsure / On Hold / Rethink)
+  // Archive (Rejected-without-interview + Withdrawn) is separate.
+  let active = 0, engaged = 0, holding = 0;
+  state.pipeline.forEach(function (r) {
+    if (['Sourced', 'Analysed', 'Ready to Apply', 'Applied'].indexOf(r.status) > -1) active++;
+    else if (['Interviewing', 'Interviewed', 'Offer', 'Accepted'].indexOf(r.status) > -1) engaged++;
+    else if (r.status === 'Rejected' && rejectedReachedInterview(r)) engaged++;
+    else if (isHoldingStatus(r.status)) holding++;
+  });
+  return { active: active, engaged: engaged, holding: holding };
+}
+
+/**
+ * Three-column funnel model:
+ *   - Potential   = pre-application (Sourced, Analysed, Ready to Apply)
+ *   - Applied     = submission (Applied only)
+ *   - Engagement  = post-application lifecycle (Interviewing, Interviewed, Offer, Accepted)
+ *   - Rejected / Withdrawn route to the archive drawer (not a column)
+ *
+ * Holdings (Unsure, On Hold, Rethink) hang off whichever column they last
+ * lived in: cards with applicationDate go to Applied, cards with docs but
+ * no appDate go to Potential (they were Ready to Apply), everything else
+ * goes to Potential.
+ */
+const COLUMN_STATUSES = {
+  'Potential':  ['Sourced', 'Analysed', 'Ready to Apply'],
+  'Applied':    ['Applied'],
+  'Engagement': ['Interviewing', 'Interviewed', 'Offer', 'Accepted']
+};
+
+function columnForStatus(status) {
+  for (const col of Object.keys(COLUMN_STATUSES)) {
+    if (COLUMN_STATUSES[col].indexOf(status) > -1) return col;
+  }
   return null;
 }
 
-function removeFromQueue(body) {
-  const queueId = body.queueId;
-  if (!queueId) return { ok: false, error: 'queueId is required' };
-
-  const sheet = openQueue();
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { ok: true, queue: [] };
-
-  const values = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
-  for (var i = 0; i < values.length; i++) {
-    if (String(values[i][0]) === String(queueId)) {
-      sheet.deleteRow(i + 2);
-      return { ok: true, queue: getQueue().items };
-    }
-  }
-  return { ok: false, error: 'Queue item not found' };
-}
-
-function clearQueue() {
-  const sheet = openQueue();
-  const lastRow = sheet.getLastRow();
-  if (lastRow > 1) sheet.getRange(2, 1, lastRow - 1, 4).clearContent();
-  return { ok: true, queue: [] };
-}
-
-
-// ============================================================
-// STATUS TRANSITION HELPER
-// ============================================================
-
-function setStatusWithTimestamp(sheet, rowId, newStatus) {
-  const now = new Date();
-  const existingStatus = sheet.getRange(rowId, COL.STATUS).getValue();
-  sheet.getRange(rowId, COL.STATUS).setValue(newStatus);
-  sheet.getRange(rowId, COL.LAST_ACTIVITY).setValue(now);
-  if (existingStatus !== newStatus) {
-    sheet.getRange(rowId, COL.STAGE_ENTERED_AT).setValue(now);
-    appendStatusHistory(sheet, rowId, newStatus, now);
-  }
-}
-
 /**
- * Append a { status, at } entry to STATUS_HISTORY (col 38).
- * Chronological order, oldest first. Idempotent guard: doesn't append
- * if the most recent entry is already this status (avoids duplicates
- * when setStatusWithTimestamp is called repeatedly with the same value).
+ * A Rejected card routes to Engagement (not Archive) if its journey
+ * shows an interview actually happened — i.e. it reached Interviewing
+ * or Interviewed at some point. Rejected cards that never made it that
+ * far stay in Archive.
  */
-function appendStatusHistory(sheet, rowId, status, at) {
-  const raw = sheet.getRange(rowId, COL.STATUS_HISTORY).getValue();
-  const history = parseStatusHistory(raw);
-
-  const last = history.length ? history[history.length - 1] : null;
-  if (last && last.status === status) return;
-
-  history.push({ status: status, at: (at instanceof Date ? at.toISOString() : at) });
-  sheet.getRange(rowId, COL.STATUS_HISTORY).setValue(JSON.stringify(history));
-}
-
-/**
- * Forward-only enforcement: once a card has reached Applied or any later
- * substage, it cannot move back to Analysed or Ready to Apply. Holding
- * statuses (On Hold / Unsure / Rethink) and archive (Rejected / Withdrawn)
- * are still allowed from any stage, including post-Applied — those are
- * lateral moves, not backward.
- *
- * Returns true if the move is allowed, false if it should be blocked.
- */
-function isStatusTransitionAllowed(history, currentStatus, newStatus) {
-  const PRE_APPLIED = ['Analysed', 'Ready to Apply'];
-  const APPLIED_OR_LATER = ['Applied', 'Interviewing', 'Interviewed', 'Offer', 'Accepted'];
-
-  // Has this card EVER reached Applied or later?
-  const hasBeenApplied =
-    APPLIED_OR_LATER.indexOf(currentStatus) > -1 ||
-    history.some(function (h) { return APPLIED_OR_LATER.indexOf(h.status) > -1; });
-
-  // Once Applied, can't move back to Analysed or Ready to Apply
-  if (hasBeenApplied && PRE_APPLIED.indexOf(newStatus) > -1) return false;
-
-  return true;
-}
-
-function parseApplicationDate(dateStr) {
-  if (!dateStr) return new Date();
-
-  const m = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!m) return new Date(dateStr);
-
-  const now = new Date();
-  const todayStr = now.getFullYear() + '-' +
-    String(now.getMonth() + 1).padStart(2, '0') + '-' +
-    String(now.getDate()).padStart(2, '0');
-
-  if (dateStr === todayStr) return now;
-  return new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
-}
-
-
-// ============================================================
-// BATCH APPEND (from Analyse master prompt TSV output)
-// ============================================================
-
-function batchAppendAnalysed(body) {
-  const tsv = (body.tsv || '').trim();
-  if (!tsv) return { ok: false, error: 'TSV is required' };
-
-  const lines = tsv.split('\n').filter(function (l) { return l.trim(); });
-  if (lines.length < 2) return { ok: false, error: 'TSV must include a header row and at least one data row' };
-
-  const dataRows = lines.slice(1);
-  const sheet = openPipeline();
-  const appended = [];
-
-  dataRows.forEach(function (line) {
-    const cells = line.split('\t');
-    while (cells.length < TOTAL_COLS) cells.push('');
-
-    cells[COL.STATUS - 1]            = 'Analysed';
-    cells[COL.DATE_ADDED - 1]        = new Date();
-    cells[COL.LAST_ACTIVITY - 1]     = new Date();
-    cells[COL.STAGE_ENTERED_AT - 1]  = new Date();
-    if (!cells[COL.ANALYSIS_DATE - 1]) cells[COL.ANALYSIS_DATE - 1] = new Date();
-
-    if (cells[COL.AD_CONTENT - 1]) {
-      cells[COL.AD_CONTENT - 1] = String(cells[COL.AD_CONTENT - 1]).replace(/\\n/g, '\n');
-    }
-
-    sheet.appendRow(cells);
-    appended.push(sheet.getLastRow());
+function rejectedReachedInterview(row) {
+  if (row.status !== 'Rejected') return false;
+  const h = Array.isArray(row.statusHistory) ? row.statusHistory : [];
+  return h.some(function (e) {
+    return e.status === 'Interviewing' || e.status === 'Interviewed';
   });
-
-  clearQueue();
-
-  return { ok: true, appendedRowIds: appended, count: appended.length };
 }
 
+/* ============================================================
+   TODAY PANEL — daily accountability tasks
+   
+   Tasks generate once per day from pipeline state. Stored in localStorage
+   keyed by YYYY-MM-DD so they persist across reloads but reset each day.
+   Streak increments when >=60% of tasks are marked done in a day; resets
+   to 0 when a day is missed. Pause-for-a-week preserves streak but
+   suppresses tasks for 7 days.
+   
+   Tasks are not persisted to the sheet — this is purely a local
+   productivity prod. Completing a task does not mutate pipeline state.
+   ============================================================ */
 
-// ============================================================
-// STAGE TRANSITIONS
-// ============================================================
+const TODAY_STORAGE_KEY = 'jp-today-v1';
+const TODAY_MIN_FOR_STREAK = 0.6;  // 60% completion counts the day
 
 /**
- * Phase 1 paste-back: saves Google Doc LINKS only.
- * The textareas for pasting content have been removed in favour of asking
- * Louie to link the Google Docs he creates manually. Doc content stays in
- * the source of truth (the Doc), not mirrored in the sheet.
+ * Load today\'s state from localStorage. Returns a fresh structure if the
+ * stored date doesn\'t match today. Handles streak maintenance: if the
+ * stored lastCompleted date was >1 day ago, streak resets.
  */
-function savePhase1Docs(body) {
-  const rowId = parseInt(body.rowId, 10);
-  if (!rowId) return { ok: false, error: 'rowId is required' };
-  const sheet = openPipeline();
-
-  if (body.coverLetterLink) sheet.getRange(rowId, COL.SUBMITTED_COVER_LETTER_LINK).setValue(body.coverLetterLink);
-  if (body.resumeLink)      sheet.getRange(rowId, COL.SUBMITTED_RESUME_LINK).setValue(body.resumeLink);
-
-  // Back-compat: still accept content if sent (legacy clients), but don't require it
-  if (body.coverLetterContent) sheet.getRange(rowId, COL.COVER_LETTER_MD).setValue(body.coverLetterContent);
-  if (body.resumeContent)      sheet.getRange(rowId, COL.RESUME_MD).setValue(body.resumeContent);
-
-  setStatusWithTimestamp(sheet, rowId, 'Ready to Apply');
-
-  return { ok: true, row: rowToObject(sheet.getRange(rowId, 1, 1, TOTAL_COLS).getValues()[0], rowId) };
+function loadTodayState() {
+  let raw;
+  try { raw = localStorage.getItem(TODAY_STORAGE_KEY); } catch (e) { raw = null; }
+  let state;
+  try { state = raw ? JSON.parse(raw) : null; } catch (e) { state = null; }
+  if (!state) state = { date: null, tasks: [], streak: 0, lastCompleted: null, pausedUntil: null };
+  return state;
 }
-
-function markAsApplied(body) {
-  const rowId = parseInt(body.rowId, 10);
-  if (!rowId) return { ok: false, error: 'rowId is required' };
-  const sheet = openPipeline();
-
-  if (body.submittedResumeContent)      sheet.getRange(rowId, COL.RESUME_MD).setValue(body.submittedResumeContent);
-  if (body.submittedCoverLetterContent) sheet.getRange(rowId, COL.COVER_LETTER_MD).setValue(body.submittedCoverLetterContent);
-
-  sheet.getRange(rowId, COL.APPLICATION_METHOD).setValue(body.appliedVia || '');
-  sheet.getRange(rowId, COL.APPLICATION_DATE).setValue(parseApplicationDate(body.applicationDate));
-  setStatusWithTimestamp(sheet, rowId, 'Applied');
-
-  const existingPrep = sheet.getRange(rowId, COL.INTERVIEW_PREP).getValue();
-  if (!existingPrep) {
-    const shell = { generatedAt: null, questions: [] };
-    sheet.getRange(rowId, COL.INTERVIEW_PREP).setValue(JSON.stringify(shell));
-  }
-
-  return { ok: true, row: rowToObject(sheet.getRange(rowId, 1, 1, TOTAL_COLS).getValues()[0], rowId) };
+function saveTodayState(s) {
+  try { localStorage.setItem(TODAY_STORAGE_KEY, JSON.stringify(s)); } catch (e) {}
 }
-
-function saveInterviewPrep(body) {
-  const rowId = parseInt(body.rowId, 10);
-  if (!rowId) return { ok: false, error: 'rowId is required' };
-  if (!body.interviewPrepJson) return { ok: false, error: 'interviewPrepJson is required' };
-
-  try { JSON.parse(body.interviewPrepJson); }
-  catch (e) { return { ok: false, error: 'Invalid JSON: ' + String(e) }; }
-
-  const sheet = openPipeline();
-  sheet.getRange(rowId, COL.INTERVIEW_PREP).setValue(body.interviewPrepJson);
-  sheet.getRange(rowId, COL.LAST_ACTIVITY).setValue(new Date());
-  return { ok: true };
+function isoToday() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function daysBetweenIso(a, b) {
+  if (!a || !b) return Infinity;
+  const da = new Date(a + 'T00:00:00').getTime();
+  const db = new Date(b + 'T00:00:00').getTime();
+  return Math.round((db - da) / 86400000);
 }
 
 /**
- * Update a single round's score on an interview prep question. Used when the
- * user edits a score inline from the dashboard. Loads the prep JSON, finds
- * the question by id, finds the round by round number, sets score, writes back.
- *
- * Body: { rowId, questionId, roundNumber, score }
- * Score must be integer 0-10. 0 means "no score / cleared".
+ * Generate today\'s task list from pipeline state. Caps at 5 tasks.
+ * Priority order: interview prep > follow-up > rejection lesson >
+ * queue analysis > stale refresh > STAR practice. STAR practice is
+ * always included as a default if there\'s space.
  */
-function updateRoundScore(body) {
-  const rowId = parseInt(body.rowId, 10);
-  if (!rowId) return { ok: false, error: 'rowId is required' };
-  if (!body.questionId) return { ok: false, error: 'questionId is required' };
-  const roundNumber = parseInt(body.roundNumber, 10);
-  if (isNaN(roundNumber)) return { ok: false, error: 'roundNumber is required' };
-  const score = parseInt(body.score, 10);
-  if (isNaN(score) || score < 0 || score > 10) return { ok: false, error: 'score must be integer 0-10' };
+function generateTodayTasks() {
+  const pipeline = state.pipeline || [];
+  const tasks = [];
 
-  const sheet = openPipeline();
-  const raw = sheet.getRange(rowId, COL.INTERVIEW_PREP).getValue();
-  let prep;
-  try { prep = raw ? JSON.parse(raw) : null; }
-  catch (e) { return { ok: false, error: 'Stored prep JSON is invalid: ' + String(e) }; }
-  if (!prep || !Array.isArray(prep.questions)) return { ok: false, error: 'No interview prep on this row' };
-
-  const q = prep.questions.find(function (x) { return x.id === body.questionId; });
-  if (!q) return { ok: false, error: 'Question not found: ' + body.questionId };
-  if (!Array.isArray(q.rounds)) return { ok: false, error: 'No rounds on this question' };
-
-  const r = q.rounds.find(function (x) { return x.round === roundNumber; });
-  if (!r) return { ok: false, error: 'Round not found: ' + roundNumber };
-
-  r.score = score;
-
-  sheet.getRange(rowId, COL.INTERVIEW_PREP).setValue(JSON.stringify(prep));
-  sheet.getRange(rowId, COL.LAST_ACTIVITY).setValue(new Date());
-  return { ok: true };
-}
-
-function updateCardStatus(body) {
-  const rowId = parseInt(body.rowId, 10);
-  if (!rowId) return { ok: false, error: 'rowId is required' };
-  if (!body.newStatus) return { ok: false, error: 'newStatus is required' };
-
-  const validStatuses = [].concat(ACTIVE_STATUSES, HOLDING_STATUSES, ARCHIVE_STATUSES, APPLIED_SUB);
-  if (validStatuses.indexOf(body.newStatus) === -1) {
-    return { ok: false, error: 'Invalid status: ' + body.newStatus };
-  }
-
-  const sheet = openPipeline();
-  const currentStatus = sheet.getRange(rowId, COL.STATUS).getValue();
-  const history = parseStatusHistory(sheet.getRange(rowId, COL.STATUS_HISTORY).getValue());
-
-  if (!isStatusTransitionAllowed(history, currentStatus, body.newStatus)) {
-    return {
-      ok: false,
-      error: 'Cannot move back to ' + body.newStatus + ' once a card has reached Applied. Once submitted, an application can only move forward through interview substages or be archived.'
-    };
-  }
-
-  setStatusWithTimestamp(sheet, rowId, body.newStatus);
-  return { ok: true };
-}
-
-function savePersonalAngle(body) {
-  const rowId = parseInt(body.rowId, 10);
-  if (!rowId) return { ok: false, error: 'rowId is required' };
-
-  const sheet = openPipeline();
-  sheet.getRange(rowId, COL.PERSONAL_ANGLE).setValue(body.personalAngle || '');
-  sheet.getRange(rowId, COL.LAST_ACTIVITY).setValue(new Date());
-  return { ok: true };
-}
-
-/**
- * Save ad content to col AD_CONTENT for a row. Used when backfilling
- * older cards that were analysed before the ad-content-capture column
- * existed, and also when the user pastes an updated ad to refresh intel
- * against newer copy. Accepts markdown or plain text.
- */
-function saveAdContent(body) {
-  const rowId = parseInt(body.rowId, 10);
-  if (!rowId) return { ok: false, error: 'rowId is required' };
-  const content = (body.adContent || '').trim();
-
-  const sheet = openPipeline();
-  sheet.getRange(rowId, COL.AD_CONTENT).setValue(content);
-  sheet.getRange(rowId, COL.LAST_ACTIVITY).setValue(new Date());
-  return { ok: true, charCount: content.length };
-}
-
-/**
- * Appends a timestamped note to the Your Notes column (col Z).
- * Storage format: JSON array of { ts, text } entries, newest first.
- * Legacy plain-text notes are preserved: they become the oldest entry
- * (flagged `legacy: true`) when the first new JSON note is added.
- */
-function saveNote(body) {
-  const rowId = parseInt(body.rowId, 10);
-  if (!rowId) return { ok: false, error: 'rowId is required' };
-  const text = (body.noteText || '').trim();
-  if (!text) return { ok: false, error: 'noteText is required' };
-
-  const sheet = openPipeline();
-  const raw = sheet.getRange(rowId, COL.YOUR_NOTES).getValue();
-  const existing = parseNotes(raw);
-
-  const newEntry = { ts: new Date().toISOString(), text: text };
-  const updated = [newEntry].concat(existing); // newest first
-
-  sheet.getRange(rowId, COL.YOUR_NOTES).setValue(JSON.stringify(updated));
-  sheet.getRange(rowId, COL.LAST_ACTIVITY).setValue(new Date());
-
-  return { ok: true, notes: updated };
-}
-
-/**
- * Update the text of an existing note entry by index. Preserves the
- * original timestamp — edits don\'t bump the note\'s ts because this is
- * "fix a typo" not "post again." Touches LAST_ACTIVITY though so the
- * card reads as recently-touched.
- */
-function updateNote(body) {
-  const rowId = parseInt(body.rowId, 10);
-  const idx = parseInt(body.idx, 10);
-  const text = (body.text || '').trim();
-
-  if (!rowId) return { ok: false, error: 'rowId is required' };
-  if (isNaN(idx) || idx < 0) return { ok: false, error: 'idx is required' };
-  if (!text) return { ok: false, error: 'text is required (empty = use deleteNote instead)' };
-
-  const sheet = openPipeline();
-  const raw = sheet.getRange(rowId, COL.YOUR_NOTES).getValue();
-  const existing = parseNotes(raw);
-
-  if (idx >= existing.length) {
-    return { ok: false, error: 'idx ' + idx + ' out of range (have ' + existing.length + ' notes)' };
-  }
-
-  existing[idx] = {
-    ts: existing[idx].ts || new Date().toISOString(),
-    text: text,
-    edited: new Date().toISOString()
-  };
-  if (existing[idx].legacy) existing[idx].legacy = true;  // preserve legacy flag if present
-
-  sheet.getRange(rowId, COL.YOUR_NOTES).setValue(JSON.stringify(existing));
-  sheet.getRange(rowId, COL.LAST_ACTIVITY).setValue(new Date());
-
-  return { ok: true, notes: existing };
-}
-
-/**
- * Delete a note entry by index. Destructive — no undo.
- */
-function deleteNote(body) {
-  const rowId = parseInt(body.rowId, 10);
-  const idx = parseInt(body.idx, 10);
-
-  if (!rowId) return { ok: false, error: 'rowId is required' };
-  if (isNaN(idx) || idx < 0) return { ok: false, error: 'idx is required' };
-
-  const sheet = openPipeline();
-  const raw = sheet.getRange(rowId, COL.YOUR_NOTES).getValue();
-  const existing = parseNotes(raw);
-
-  if (idx >= existing.length) {
-    return { ok: false, error: 'idx ' + idx + ' out of range' };
-  }
-
-  existing.splice(idx, 1);
-  sheet.getRange(rowId, COL.YOUR_NOTES).setValue(JSON.stringify(existing));
-  sheet.getRange(rowId, COL.LAST_ACTIVITY).setValue(new Date());
-
-  return { ok: true, notes: existing };
-}
-
-/**
- * Replace the full STATUS_HISTORY for a row with a user-edited version.
- * Called from the Edit journey modal. Accepts whatever array the user
- * built — no sequencing enforcement, because the user's memory of what
- * actually happened is more reliable than any rule we could impose.
- *
- * Side effect: if the last entry in the edited history differs from the
- * current STATUS cell, the STATUS cell is updated too — so editing the
- * journey to end at a different status moves the card to that status.
- * This is the right behaviour when fixing "I moved it to Offer but it
- * should've been Accepted" mistakes.
- */
-function saveStatusHistory(body) {
-  const rowId = parseInt(body.rowId, 10);
-  if (!rowId) return { ok: false, error: 'rowId is required' };
-
-  let history;
-  try {
-    history = JSON.parse(body.historyJson || '[]');
-  } catch (e) {
-    return { ok: false, error: 'Invalid history JSON: ' + String(e) };
-  }
-  if (!Array.isArray(history)) return { ok: false, error: 'History must be an array' };
-
-  // Validate each entry shape — status required, at optional but should
-  // be a valid date string if present
-  const validStatuses = [].concat(ACTIVE_STATUSES, HOLDING_STATUSES, ARCHIVE_STATUSES, APPLIED_SUB);
-  const clean = [];
-  for (var i = 0; i < history.length; i++) {
-    const entry = history[i];
-    if (!entry || !entry.status) continue;
-    if (validStatuses.indexOf(entry.status) === -1) {
-      return { ok: false, error: 'Invalid status at entry ' + (i + 1) + ': ' + entry.status };
-    }
-    clean.push({
-      status: entry.status,
-      at: entry.at ? toIso(entry.at) : null
+  // Upcoming interview — highest priority if any Interviewing card has
+  // an interview date in next 7 days. (We don\'t have an interview-date
+  // field yet, so for now any Interviewing card surfaces one.)
+  const interviewing = pipeline.filter(function (r) { return r.status === 'Interviewing'; });
+  if (interviewing.length > 0) {
+    const pick = interviewing[0];
+    tasks.push({
+      id: 'interview-prep-' + pick.rowId,
+      type: 'interviewPrep',
+      rowId: pick.rowId,
+      done: false,
+      title: 'Prep for your ' + pick.company + ' interview',
+      subtitle: 'Review ' + pick.role + ' prep',
+      actionLabel: 'Open card',
+      action: { kind: 'openCard', rowId: pick.rowId }
     });
   }
 
-  const sheet = openPipeline();
-  sheet.getRange(rowId, COL.STATUS_HISTORY).setValue(JSON.stringify(clean));
-
-  // Sync the current STATUS cell with the last entry if different
-  if (clean.length) {
-    const finalStatus = clean[clean.length - 1].status;
-    const currentStatus = sheet.getRange(rowId, COL.STATUS).getValue();
-    if (finalStatus !== currentStatus) {
-      sheet.getRange(rowId, COL.STATUS).setValue(finalStatus);
-      sheet.getRange(rowId, COL.STAGE_ENTERED_AT).setValue(new Date());
-    }
-  }
-
-  sheet.getRange(rowId, COL.LAST_ACTIVITY).setValue(new Date());
-
-  return { ok: true, history: clean };
-}
-
-
-// ============================================================
-// BATCH JOURNEY UPDATE
-// ============================================================
-
-/**
- * Apply a status journey template to multiple cards at once. For each
- * selected card, the template entries are merged into the existing
- * journey using these rules:
- *   - If template lists a status the card doesn\'t have, add it with
- *     the template\'s date
- *   - If template lists a status the card already has, UPDATE the
- *     existing entry\'s date to match the template (backdate fix)
- *   - Existing journey entries not mentioned in the template stay
- *     untouched
- *
- * After merging, the journey is sorted chronologically by date and
- * the card\'s current STATUS cell is synced to the latest entry.
- *
- * No forward-only lock: this path is for backdating and historical
- * correction, NOT for changing current status. Use updateCardStatus
- * for "move card forward" actions.
- *
- * Body: {
- *   rowIds: [123, 456, 789],
- *   template: [
- *     { status: "Analysed", at: "2026-03-01T..." },
- *     { status: "Applied",  at: "2026-04-15T..." }
- *   ]
- * }
- *
- * Returns: { ok, updated: N, skipped: N, results: [{ rowId, status: "updated"|"skipped"|"error", message }] }
- */
-function batchUpdateJourney(body) {
-  // Defensive parsing: rowIds may arrive as array, as comma-separated string,
-  // or wrapped — try to coerce sensibly before failing.
-  let rowIds = [];
-  if (Array.isArray(body.rowIds)) {
-    rowIds = body.rowIds.map(function (n) { return parseInt(n, 10); }).filter(function (n) { return !isNaN(n) && n > 0; });
-  } else if (typeof body.rowIds === 'string') {
-    rowIds = body.rowIds.split(',').map(function (n) { return parseInt(n, 10); }).filter(function (n) { return !isNaN(n) && n > 0; });
-  }
-  if (!rowIds.length) {
-    return { ok: false, error: 'rowIds is required (got: ' + JSON.stringify(body.rowIds) + ')' };
-  }
-
-  const template = Array.isArray(body.template) ? body.template : [];
-  if (!template.length) {
-    return { ok: false, error: 'template is required (got: ' + JSON.stringify(body.template) + ')' };
-  }
-
-  // Validate template up-front so a bad status fails fast for the whole batch
-  const validStatuses = [].concat(ACTIVE_STATUSES, HOLDING_STATUSES, ARCHIVE_STATUSES, APPLIED_SUB);
-  for (var t = 0; t < template.length; t++) {
-    if (!template[t] || !template[t].status) {
-      return { ok: false, error: 'Template entry ' + (t + 1) + ' is missing status' };
-    }
-    if (validStatuses.indexOf(template[t].status) === -1) {
-      return { ok: false, error: 'Template entry ' + (t + 1) + ' has invalid status: "' + template[t].status + '" (valid: ' + validStatuses.join(', ') + ')' };
-    }
-    if (!template[t].at) {
-      return { ok: false, error: 'Template entry ' + (t + 1) + ' (' + template[t].status + ') is missing date' };
-    }
-  }
-
-  let sheet;
-  try {
-    sheet = openPipeline();
-  } catch (e) {
-    return { ok: false, error: 'Failed to open Pipeline sheet: ' + String(e) };
-  }
-
-  const results = [];
-  let updated = 0;
-  let skipped = 0;
-
-  for (var i = 0; i < rowIds.length; i++) {
-    const rowId = rowIds[i];
-    try {
-      const existingRaw = sheet.getRange(rowId, COL.STATUS_HISTORY).getValue();
-      const existing = parseStatusHistory(existingRaw);
-
-      // Build a status->entry map for O(1) lookup. Template overrides win.
-      const merged = {};
-      existing.forEach(function (e) { merged[e.status] = { status: e.status, at: e.at }; });
-      template.forEach(function (e) {
-        const isoVal = toIso(e.at);
-        if (!isoVal) {
-          throw new Error('Could not parse date "' + e.at + '" for status ' + e.status);
-        }
-        merged[e.status] = { status: e.status, at: isoVal };
-      });
-
-      // Convert back to chronological array. Sort by date ascending; entries
-      // with no date go last in their original position (rare).
-      const mergedArr = Object.keys(merged).map(function (k) { return merged[k]; });
-      mergedArr.sort(function (a, b) {
-        if (!a.at && !b.at) return 0;
-        if (!a.at) return 1;
-        if (!b.at) return -1;
-        return new Date(a.at).getTime() - new Date(b.at).getTime();
-      });
-
-      // Persist the merged journey
-      sheet.getRange(rowId, COL.STATUS_HISTORY).setValue(JSON.stringify(mergedArr));
-
-      // Sync current STATUS to the chronologically-latest entry (which is
-      // probably what the user wants — if they backdated Analysed for a
-      // card that\'s currently Applied, Applied stays as the current status
-      // because Applied has the later date).
-      if (mergedArr.length) {
-        const finalStatus = mergedArr[mergedArr.length - 1].status;
-        const currentStatus = sheet.getRange(rowId, COL.STATUS).getValue();
-        if (finalStatus !== currentStatus) {
-          sheet.getRange(rowId, COL.STATUS).setValue(finalStatus);
-          sheet.getRange(rowId, COL.STAGE_ENTERED_AT).setValue(new Date());
-        }
-      }
-
-      sheet.getRange(rowId, COL.LAST_ACTIVITY).setValue(new Date());
-      updated++;
-      results.push({ rowId: rowId, status: 'updated' });
-    } catch (err) {
-      skipped++;
-      results.push({ rowId: rowId, status: 'error', message: String(err && err.message ? err.message : err) });
-    }
-  }
-
-  // If everything was skipped, surface that as a failure with details.
-  // Otherwise return success even if some rows failed (partial success).
-  if (updated === 0 && skipped > 0) {
-    const errorSummary = results.filter(function (r) { return r.status === 'error'; })
-      .map(function (r) { return 'Row ' + r.rowId + ': ' + r.message; })
-      .slice(0, 3)  // first 3 for brevity
-      .join(' | ');
-    return { ok: false, error: 'All ' + skipped + ' rows failed. ' + errorSummary, results: results };
-  }
-
-  return { ok: true, updated: updated, skipped: skipped, results: results };
-}
-
-
-// ============================================================
-// LEGACY: appendAnalysedJob (kept for backward compat)
-// ============================================================
-
-function appendAnalysedJob(body) {
-  const force = body.force === true;
-  const sheet = openPipeline();
-
-  if (!force && body.url) {
-    const lastRow = sheet.getLastRow();
-    if (lastRow > 1) {
-      const startRow = Math.max(2, lastRow - 499);
-      const urls = sheet.getRange(startRow, COL.URL, lastRow - startRow + 1, 1).getValues();
-      for (var i = 0; i < urls.length; i++) {
-        if (urls[i][0] === body.url) {
-          return { ok: false, duplicate: true, message: 'URL already in pipeline. Pass force:true to override.' };
-        }
-      }
-    }
-  }
-
-  const row = new Array(TOTAL_COLS).fill('');
-  row[COL.STATUS - 1]                = 'Analysed';
-  row[COL.COMPANY - 1]               = body.company || '';
-  row[COL.ROLE - 1]                  = body.role || '';
-  row[COL.FIT_SCORE - 1]             = body.fitScore || '';
-  row[COL.RECOMMENDATION - 1]        = body.recommendation || '';
-  row[COL.URL - 1]                   = body.url || '';
-  row[COL.KEY_NOTES - 1]             = body.keyNotes || '';
-  row[COL.COMPANY_INTEL - 1]         = body.companyIntel || '';
-  row[COL.SALARY - 1]                = body.salary || '';
-  row[COL.LOCATION - 1]              = body.location || '';
-  row[COL.WORK_ARRANGEMENT - 1]      = body.workArrangement || '';
-  row[COL.KEY_ALIGNMENTS - 1]        = body.keyAlignments || '';
-  row[COL.POTENTIAL_CONCERNS - 1]    = body.potentialConcerns || '';
-  row[COL.APPLICATION_PRIORITY - 1]  = body.applicationPriority || '';
-  row[COL.TAILORED_PITCH - 1]        = body.tailoredPitch || '';
-  row[COL.ANALYSIS_DATE - 1]         = new Date();
-  row[COL.DATE_ADDED - 1]            = new Date();
-  row[COL.LAST_ACTIVITY - 1]         = new Date();
-  row[COL.PERSONAL_ANGLE - 1]        = body.personalAngle || '';
-
-  sheet.appendRow(row);
-  return { ok: true, rowId: sheet.getLastRow() };
-}
-
-
-// ============================================================
-// PROMPT DELIVERY
-// ============================================================
-
-function getPrompt(type, params) {
-  function parseIds(s) {
-    return String(s || '').split(',').map(function (v) { return parseInt(v, 10); }).filter(function (n) { return !isNaN(n); });
-  }
-
-  switch (type) {
-    case 'analyse':              return { ok: true, prompt: buildAnalysePrompt() };
-    case 'generateDocs':         return { ok: true, prompt: buildGenerateDocsPrompt(parseInt(params.rowId, 10)) };
-    case 'interviewPrep':        return { ok: true, prompt: buildInterviewPrepPrompt(parseInt(params.rowId, 10)) };
-    case 'continuePractice':     return { ok: true, prompt: buildContinuePracticePrompt(parseInt(params.rowId, 10)) };
-    case 'voicePractice':        return { ok: true, prompt: buildVoicePracticePrompt(parseInt(params.rowId, 10)) };
-    case 'batchAnalyse':         return { ok: true, prompt: buildBatchAnalysePrompt(parseIds(params.rowIds)) };
-    case 'batchGenerateDocs':    return { ok: true, prompt: buildBatchGenerateDocsPrompt(parseIds(params.rowIds)) };
-    case 'batchInterviewPrep':   return { ok: true, prompt: buildBatchInterviewPrepPrompt(parseIds(params.rowIds)) };
-    default: return { ok: false, error: 'Unknown prompt type: ' + type };
-  }
-}
-
-
-// ============================================================
-// PROMPT BUILDERS
-// ============================================================
-
-function buildAnalysePrompt() {
-  const queue = getQueue().items;
-  if (!queue.length) return 'Queue is empty. Add jobs via the intake modal before generating the analyse prompt.';
-
-  const jobsBlock = queue.map(function (item, i) {
-    return 'JOB ' + (i + 1) + '\n' +
-           'URL: ' + item.url + '\n' +
-           'SOURCE: ' + item.source + '\n' +
-           'CONTENT:\n' + item.content + '\n';
-  }).join('\n---\n\n');
-
-  return [
-    'You are analysing ' + queue.length + ' job ad' + (queue.length > 1 ? 's' : '') + ' for Louie Radburnd\'s job pipeline. Produce a TSV output for direct paste into the Job Pipeline v2 spreadsheet.',
-    '',
-    'JOBS:',
-    '',
-    jobsBlock,
-    '',
-    'FOR EACH JOB, GENERATE:',
-    '- Company and Role (extracted from content)',
-    '- Fit Score (integer 0-10, whole numbers only, 8+ is strong) based on Louie\'s profile: 18+ years full-stack B2B/association marketing, MTAA 7 years (Marketing & Membership Manager), IndustraCom GM and Head of Growth, Sydney-based',
-    '- Recommendation: MUST be one of exactly these three values (uppercase): "APPLY", "CONSIDER", "SKIP". Use APPLY for strong fits (~7+), CONSIDER for borderline, SKIP for weak fits.',
-    '- Key Notes: 2-3 sentences on what the role actually is and why it matters',
-    '- Company Intel JSON (single-line, escaped) with this structure:',
-    '  {"industry":"...","products":"...","scale":"...","newsworthy":"...","marketingInsights":{"positioning":"...","goToMarket":"...","competitors":"...","teamSignals":"...","talkingPoints":"..."}}',
-    '- Salary (from ad, or "Not specified")',
-    '- Location and Work Arrangement',
-    '- Key Alignments: 3-5 items separated by " | "',
-    '- Potential Concerns: 2-4 items separated by " | "',
-    '- Application Priority: MUST be one of exactly these three values (uppercase): "HIGH", "MEDIUM", "LOW"',
-    '- Tailored Pitch: 1-2 sentences on how Louie should position',
-    '- Personal Angle: 1 sentence on the human hook (e.g. parent-of-two for early-childhood roles, long-time user for product roles)',
-    '- Ad Content Markdown: REQUIRED. A clean markdown representation of the full job ad, so Louie can reference it without revisiting the URL. Include role title, company, salary if stated, full responsibilities, required experience, and any selection criteria. Use # and ## for structure, - for bullets. CRITICAL: within the TSV cell, replace every real newline with the literal string \\n (backslash-n) so the cell remains on one line. Do NOT include tab characters. The dashboard will restore newlines when displaying.',
-    '',
-    'OUTPUT FORMAT:',
-    'Return a single TSV block, tab-separated, newline-ended. First row is the header below. One row per job.',
-    'Status\\tCompany\\tRole\\tFit Score\\tRecommendation\\tURL\\tKey Notes\\tCompany Intel\\tSalary\\tSalary Expectation\\tLocation\\tWork Arrangement\\tKey Alignments\\tPotential Concerns\\tApplication Priority\\tTailored Pitch\\tAnalysis Date\\tCultural Fit\\tResume Markdown\\tCover Letter Markdown\\tSubmitted Resume Link\\tSubmitted Cover Letter Link\\tInterview Prep\\tLinkedIn Contacts Link\\tLast Activity\\tYour Notes\\tDuplicate Check\\tApplication Date\\tApplication Method\\tFollow-up Date\\tDate Added\\tContact Name\\tContact Email\\tContact LinkedIn\\tPersonal Angle\\tAd Content Markdown',
-    '',
-    'ROW RULES:',
-    '- Status: "Analysed"',
-    '- Company Intel: the JSON as a single escaped string (no real tabs or newlines inside)',
-    '- Salary Expectation, Cultural Fit, Resume Markdown through Contact LinkedIn: leave blank',
-    '- Analysis Date and Date Added: today',
-    '- Personal Angle: the sentence you generated',
-    '- Ad Content Markdown: the full job ad as markdown, with newlines replaced by the literal two-character sequence \\n',
-    '',
-    'IMPORTANT:',
-    '- No em dashes anywhere',
-    '- Australian English spellings (organise, analyse, colour, etc.)',
-    '- TSV must be valid: no stray tabs or real newlines inside cell values (newlines in Ad Content Markdown must be the literal two-character \\n, not real newlines)',
-    '- Output the raw TSV only, no surrounding code fences, no commentary before or after',
-    '',
-    'Wrap the TSV in <tsv> tags so it\'s unambiguous to paste back.'
-  ].join('\n');
-}
-
-function buildGenerateDocsPrompt(rowId) {
-  const row = getRow(rowId).row;
-  if (!row) return 'Row ' + rowId + ' not found.';
-
-  const intel = row.companyIntel || {};
-  const mi = intel.marketingInsights || {};
-
-  return [
-    'Generate a tailored resume and cover letter for Louie Radburnd applying to the role below. Use your master resume (Louie_Radburnd_Master_Resume_FINAL.docx in this project) as the source of truth for career history.',
-    '',
-    'ROLE: ' + (row.role || ''),
-    'COMPANY: ' + (row.company || ''),
-    'LOCATION: ' + (row.location || ''),
-    'WORK ARRANGEMENT: ' + (row.workArrangement || ''),
-    'SALARY: ' + (row.salary || ''),
-    'JOB URL: ' + (row.url || ''),
-    '',
-    'KEY NOTES: ' + (row.keyNotes || ''),
-    'KEY ALIGNMENTS: ' + (row.keyAlignments || ''),
-    'POTENTIAL CONCERNS: ' + (row.potentialConcerns || ''),
-    'TAILORED PITCH: ' + (row.tailoredPitch || ''),
-    'PERSONAL ANGLE: ' + (row.personalAngle || ''),
-    '',
-    'COMPANY INTEL:',
-    '- Industry: ' + (intel.industry || ''),
-    '- Products: ' + (intel.products || ''),
-    '- Scale: ' + (intel.scale || ''),
-    '- Positioning: ' + (mi.positioning || ''),
-    '- Go-to-market: ' + (mi.goToMarket || ''),
-    '- Competitors: ' + (mi.competitors || ''),
-    '- Team signals: ' + (mi.teamSignals || ''),
-    '',
-    'RESUME REQUIREMENTS:',
-    '- Tailor content from master resume, selecting most relevant experience and achievements',
-    '- Prioritise measurable outcomes over responsibilities',
-    '- Minimum 2 bullets per role, minimum 5 for MTAA and IndustraCom',
-    '- Include all 7 roles (2008-2025)',
-    '- Profile starts with "Most marketers specialise. I\'ve spent 18+ years doing all of it..." (Version 3)',
-    '- Closing personal line in profile should be clever, role-specific, one sentence max — make the reader smirk or nod',
-    '- No em dashes anywhere',
-    '- Australian English',
-    '- 2 pages max',
-    '',
-    'COVER LETTER VOICE (locked):',
-    '- Direct, conversational, slightly opinionated',
-    '- First 1-2 paragraphs: answer "why this role / why this company" explicitly',
-    '- Concrete proof points from MTAA / IndustraCom with real numbers',
-    '- Address obvious gaps (sector, credentials) on own terms',
-    '- Include AI paragraph citing the n8n-based job pipeline (fit scoring, deep company research, dashboard-generated tailored docs) with marketing-equivalent use cases',
-    '- Forward-looking close',
-    '- No em dashes',
-    '- Australian English',
-    '- 250-400 words, one A4 page',
-    '',
-    'COVER LETTER FORMAT (for output as markdown — Louie will paste into his branded DOCX template):',
-    '- No bold colon-format headings inside the body',
-    '- Salutation: "Hi Hiring Manager"',
-    '- Sign off: "Louie Radburnd" only',
-    '',
-    'OUTPUT FORMAT:',
-    'Return exactly two blocks, clearly delimited:',
-    '',
-    '=== COVER LETTER ===',
-    '[cover letter markdown content here]',
-    '=== END COVER LETTER ===',
-    '',
-    '=== RESUME ===',
-    '[resume markdown content here]',
-    '=== END RESUME ===',
-    '',
-    'After both blocks, stop. No commentary, no explanation.'
-  ].join('\n');
-}
-
-function buildInterviewPrepPrompt(rowId) {
-  const row = getRow(rowId).row;
-  if (!row) return 'Row ' + rowId + ' not found.';
-
-  const intel = row.companyIntel || {};
-  const mi = intel.marketingInsights || {};
-
-  return [
-    'Generate an interview prep JSON for Louie Radburnd applying to the role below. Return valid JSON only, no commentary.',
-    '',
-    'ROLE: ' + (row.role || ''),
-    'COMPANY: ' + (row.company || ''),
-    'JOB URL: ' + (row.url || ''),
-    '',
-    'KEY NOTES: ' + (row.keyNotes || ''),
-    'KEY ALIGNMENTS: ' + (row.keyAlignments || ''),
-    'POTENTIAL CONCERNS: ' + (row.potentialConcerns || ''),
-    'TAILORED PITCH: ' + (row.tailoredPitch || ''),
-    'PERSONAL ANGLE: ' + (row.personalAngle || ''),
-    '',
-    'COMPANY INTEL:',
-    '- Industry: ' + (intel.industry || ''),
-    '- Products: ' + (intel.products || ''),
-    '- Positioning: ' + (mi.positioning || ''),
-    '- Go-to-market: ' + (mi.goToMarket || ''),
-    '- Competitors: ' + (mi.competitors || ''),
-    '- Team signals: ' + (mi.teamSignals || ''),
-    '- Talking points: ' + (mi.talkingPoints || ''),
-    '',
-    'GENERATE 6 ANTICIPATED INTERVIEW QUESTIONS:',
-    '- 4 marked "Likely" (high probability based on role and company context)',
-    '- 2 marked "Possible" (plausible follow-ups, stretch questions)',
-    '- Mix strategic (how would you approach X), behavioural (tell me about a time when), and company-specific (what\'s your view on our recent move)',
-    '',
-    'FOR EACH QUESTION, PROVIDE A PREPARED ANSWER:',
-    '- Reference specific Louie stories from his career (MTAA conference scaling, IndustraCom turnaround, RegConnect build, ABC rapid response campaign, membership transformation)',
-    '- Use real numbers where applicable',
-    '- Prepared answer is a STARTING POINT for Louie to refine in practice sessions, not a final script',
-    '- Tone: confident, specific, not over-polished',
-    '- preparedAnswerBullets: the same answer compressed to 3-5 short bullet points for quick recall right before the interview. Each bullet 6-12 words, leading with the verb or the number',
-    '',
-    'OUTPUT FORMAT — return exactly this JSON shape:',
-    '',
-    '{',
-    '  "generatedAt": "<ISO 8601 timestamp>",',
-    '  "questions": [',
-    '    {',
-    '      "id": "q1",',
-    '      "text": "<question text>",',
-    '      "likelihood": "Likely",',
-    '      "status": "not_practiced",',
-    '      "preparedAnswer": "<starting-point answer>",',
-    '      "preparedAnswerBullets": ["<bullet 1>", "<bullet 2>", "<bullet 3>"],',
-    '      "currentRound": 0,',
-    '      "rounds": []',
-    '    }',
-    '    // 5 more questions following the same shape',
-    '  ]',
-    '}',
-    '',
-    'Wrap the JSON in <interview_prep> tags so it\'s unambiguous to paste back.',
-    '',
-    'IMPORTANT:',
-    '- No em dashes',
-    '- Australian English',
-    '- JSON must be valid and parseable',
-    '- Do NOT include a STAR responses section or a claims audit section',
-    '- Do NOT invent metrics that aren\'t in Louie\'s verified career history'
-  ].join('\n');
-}
-
-function buildContinuePracticePrompt(rowId) {
-  const row = getRow(rowId).row;
-  if (!row) return 'Row ' + rowId + ' not found.';
-
-  const prep = row.interviewPrep || { questions: [] };
-  const questions = prep.questions || [];
-
-  const summary = questions.map(function (q, i) {
-    const status = q.status || 'not_practiced';
-    const rounds = q.currentRound || 0;
-    return '- Q' + (i + 1) + ' [' + status + ', round ' + rounds + ']: ' + q.text;
-  }).join('\n');
-
-  return [
-    'Continue the interview practice session with Louie for the role below. Act as the interviewer. Ask one question, wait for his answer, give honest direct feedback, then prompt him to refine or move to the next question.',
-    '',
-    'ROLE: ' + (row.role || ''),
-    'COMPANY: ' + (row.company || ''),
-    '',
-    'QUESTION STATE:',
-    summary || '(no questions yet — generate them first via the interview prep prompt)',
-    '',
-    'FULL INTERVIEW PREP JSON (current state):',
-    JSON.stringify(prep, null, 2),
-    '',
-    'YOUR JOB:',
-    '1. Suggest which question to work on next (prioritise in_progress over not_practiced, lowest round number first)',
-    '2. Ask Louie that question out loud — not the prepared answer, the actual question',
-    '3. Wait for his response',
-    '4. Give feedback that is:',
-    '   - Honest and specific (what worked, what didn\'t, why)',
-    '   - Concrete (point to phrases, not vague impressions)',
-    '   - Actionable (what to change next round)',
-    '   - Never flattering without evidence',
-    '5. At the end of each round, output an updated JSON blob with the new round appended to that question\'s rounds array. Include:',
-    '   - round: <number>',
-    '   - userAnswer: <his answer>',
-    '   - feedback: <your full feedback>',
-    '   - summary: <one-line synthesis for history, e.g. "Better than round 1, owned the decision, still missing specifics">',
-    '   - score: <integer 1-10> using this rubric:',
-    '       1-3: hesitant, vague, no specifics, dodged the question',
-    '       4-5: covered the basics but missed the point or rambled',
-    '       6-7: solid, on-topic, used a real story, minor polish needed',
-    '       8-9: sharp, specific, well-structured, lands the punchline',
-    '       10: nailed it, ready for the actual interview',
-    '6. Offer: continue this question for another round, mark it as nailed, or move to the next one',
-    '',
-    'OUTPUT FORMAT PER ROUND:',
-    'Your feedback in prose, followed by an updated JSON blob wrapped in <interview_prep> tags.',
-    '',
-    'IMPORTANT:',
-    '- No em dashes',
-    '- Australian English',
-    '- When a question is marked nailed, drop the rounds array in favour of a final polished answer',
-    '- If Louie\'s answer references a story from his STAR bank, check it aligns with his verified history (MTAA conference $214k to $815k, IndustraCom -10 to +2 per month, RegConnect 6-week build, etc.)'
-  ].join('\n');
-}
-
-/**
- * Voice-mode practice prompt for ChatGPT. Bundles the role, ad, current
- * prep state, voice-mode rules, and end-of-session JSON spec so Louie can
- * paste it into ChatGPT voice mode and run a verbal mock interview.
- *
- * Assumes the ChatGPT project already has the resume + STAR bank uploaded
- * (Voice and Standards file etc), so per-session prompt stays lean.
- *
- * The output JSON spec at the end matches the existing paste-back parser,
- * so finishing in ChatGPT and pasting back into the dashboard works the
- * same as the text-mode flow.
- */
-function buildVoicePracticePrompt(rowId) {
-  const row = getRow(rowId).row;
-  if (!row) return 'Row ' + rowId + ' not found.';
-
-  const prep = row.interviewPrep || { questions: [] };
-  const questions = prep.questions || [];
-
-  const summary = questions.map(function (q, i) {
-    const status = q.status || 'not_practiced';
-    const rounds = q.currentRound || 0;
-    return '- Q' + (i + 1) + ' [' + status + ', round ' + rounds + ']: ' + q.text;
-  }).join('\n');
-
-  return [
-    'VOICE PRACTICE SESSION — INTERVIEW COACH',
-    '',
-    'You are running a voice-mode mock interview for Louie Radburnd. He will speak; you will respond conversationally. Treat this like a real coaching session, not a chat with an LLM.',
-    '',
-    'ROLE: ' + (row.role || ''),
-    'COMPANY: ' + (row.company || ''),
-    'JOB URL: ' + (row.url || ''),
-    '',
-    'AD CONTENT:',
-    (row.adContent || '(no ad content)'),
-    '',
-    'CURRENT PRACTICE STATE:',
-    summary || '(no questions yet)',
-    '',
-    'FULL INTERVIEW PREP JSON:',
-    JSON.stringify(prep, null, 2),
-    '',
-    'VOICE-MODE RULES:',
-    '1. Speak naturally. One question at a time. No reading lists, no JSON during the session.',
-    '2. After Louie answers, give honest spoken feedback in 2-4 sentences. What worked, what didn\'t, what to change next round. No vague praise.',
-    '3. Ask if he wants to try the same question again, mark it nailed, or move on.',
-    '4. Pick the next question by priority: in_progress (lowest round first), then not_practiced. Skip nailed ones unless he asks for a refresher.',
-    '5. Keep your tone direct and Australian. No corporate filler. No "great answer!" without specifics.',
-    '6. If he gives a story, check it against his verified history (MTAA conference $214k to $815k over 7 years, IndustraCom -10 to +2 per month inside 6 months, RegConnect built in 6 weeks, MedTech LinkedIn 200 to 16,000+, etc). If a number sounds off, gently flag it.',
-    '',
-    'END OF SESSION:',
-    'When Louie says "wrap up" or "we\'re done", do these three things in order:',
-    '1. Give a 2-3 sentence summary of what improved and what still needs work.',
-    '2. Output the updated interview prep JSON wrapped in <interview_prep> tags. For each question he practiced this session, append new round(s) to the rounds array. Each new round must include:',
-    '   - round: <number>',
-    '   - userAnswer: <a short paraphrase of what he said, since this is voice>',
-    '   - feedback: <your full feedback for that round>',
-    '   - summary: <one-line synthesis>',
-    '   - score: <integer 1-10> using this rubric:',
-    '       1-3: hesitant, vague, no specifics, dodged the question',
-    '       4-5: covered the basics but missed the point or rambled',
-    '       6-7: solid, on-topic, used a real story, minor polish needed',
-    '       8-9: sharp, specific, well-structured, lands the punchline',
-    '       10: nailed it, ready for the actual interview',
-    '   For nailed questions, drop the rounds array in favour of a final polished preparedAnswer.',
-    '3. Tell him to paste the JSON back into the dashboard via "Save practice JSON".',
-    '',
-    'IMPORTANT:',
-    '- No em dashes in spoken or written output',
-    '- Australian English',
-    '- The JSON is the durable record. Without it, this session evaporates when the chat closes.'
-  ].join('\n');
-}
-
-
-// ============================================================
-// BATCH PROMPT BUILDERS
-// ============================================================
-
-function buildBatchAnalysePrompt(rowIds) {
-  if (!rowIds || !rowIds.length) return 'No row IDs provided.';
-  const rows = rowIds.map(function (id) { return getRow(id).row; }).filter(Boolean);
-  if (!rows.length) return 'No valid rows found for the given IDs.';
-
-  const jobsBlock = rows.map(function (r) {
-    return '<<< JOB rowId=' + r.rowId + ' >>>\n' +
-           'URL: ' + (r.url || '') + '\n' +
-           'COMPANY: ' + (r.company || '') + '\n' +
-           'CURRENT ROLE: ' + (r.role || '') + '\n' +
-           'AD CONTENT:\n' + (r.adContent || '(no ad content captured)') + '\n' +
-           '<<< END JOB ' + r.rowId + ' >>>';
-  }).join('\n\n');
-
-  return [
-    'You are re-analysing ' + rows.length + ' job ad' + (rows.length > 1 ? 's' : '') + ' for Louie Radburnd. Produce a fresh analysis for each job, using the current ad content. Return one block per job using the exact delimiter format shown.',
-    '',
-    'JOBS:',
-    '',
-    jobsBlock,
-    '',
-    'FOR EACH JOB:',
-    '- Fit Score (integer 0-10, whole numbers only, 8+ is strong)',
-    '- Recommendation: MUST be one of exactly these three values (uppercase): "APPLY", "CONSIDER", "SKIP". Use APPLY for strong fits (~7+), CONSIDER for borderline, SKIP for weak fits.',
-    '- Key Notes: 2-3 sentences on what the role is and why it matters',
-    '- Key Alignments: 3-5 items separated by " | "',
-    '- Potential Concerns: 2-4 items separated by " | "',
-    '- Application Priority: MUST be one of exactly these three values (uppercase): "HIGH", "MEDIUM", "LOW"',
-    '- Tailored Pitch: 1-2 sentences on how Louie should position',
-    '- Personal Angle: 1 sentence on the human hook',
-    '- Company Intel JSON single-line:',
-    '  {"industry":"...","products":"...","scale":"...","newsworthy":"...","marketingInsights":{"positioning":"...","goToMarket":"...","competitors":"...","teamSignals":"...","talkingPoints":"..."}}',
-    '',
-    'OUTPUT FORMAT: one block per job using exact delimiters:',
-    '',
-    '<<< RESULT rowId=N >>>',
-    'FIT_SCORE: 8',
-    'RECOMMENDATION: Apply',
-    'KEY_NOTES: ...',
-    'KEY_ALIGNMENTS: item 1 | item 2 | item 3',
-    'POTENTIAL_CONCERNS: item 1 | item 2',
-    'APPLICATION_PRIORITY: High',
-    'TAILORED_PITCH: ...',
-    'PERSONAL_ANGLE: ...',
-    'COMPANY_INTEL: {"industry":"..."}',
-    '<<< END RESULT N >>>',
-    '',
-    'IMPORTANT:',
-    '- No em dashes anywhere',
-    '- Australian English',
-    '- Do not escape quotes inside values (use straight quotes; the parser handles them)',
-    '- Each RESULT block must contain ALL fields, even if repeating existing values',
-    '- Output only the RESULT blocks, no surrounding prose'
-  ].join('\n');
-}
-
-function buildBatchGenerateDocsPrompt(rowIds) {
-  if (!rowIds || !rowIds.length) return 'No row IDs provided.';
-  const rows = rowIds.map(function (id) { return getRow(id).row; }).filter(Boolean);
-  if (!rows.length) return 'No valid rows found for the given IDs.';
-
-  const jobsBlock = rows.map(function (r) {
-    const intel = r.companyIntel || {};
-    const mi = intel.marketingInsights || {};
-    return '<<< JOB rowId=' + r.rowId + ' >>>\n' +
-           'ROLE: ' + (r.role || '') + '\n' +
-           'COMPANY: ' + (r.company || '') + '\n' +
-           'LOCATION: ' + (r.location || '') + '\n' +
-           'SALARY: ' + (r.salary || '') + '\n' +
-           'URL: ' + (r.url || '') + '\n' +
-           'KEY NOTES: ' + (r.keyNotes || '') + '\n' +
-           'KEY ALIGNMENTS: ' + (r.keyAlignments || '') + '\n' +
-           'POTENTIAL CONCERNS: ' + (r.potentialConcerns || '') + '\n' +
-           'TAILORED PITCH: ' + (r.tailoredPitch || '') + '\n' +
-           'PERSONAL ANGLE: ' + (r.personalAngle || '') + '\n' +
-           'COMPANY INTEL: ' + JSON.stringify({ industry: intel.industry, positioning: mi.positioning, goToMarket: mi.goToMarket, competitors: mi.competitors }) + '\n' +
-           '<<< END JOB ' + r.rowId + ' >>>';
-  }).join('\n\n');
-
-  return [
-    'Generate a tailored resume and cover letter for Louie Radburnd for each of the ' + rows.length + ' jobs below. Use Louie_Radburnd_Master_Resume_FINAL.docx in this project as the source of truth.',
-    '',
-    'JOBS:',
-    '',
-    jobsBlock,
-    '',
-    'RESUME REQUIREMENTS:',
-    '- Tailor content, selecting most relevant experience and achievements per role',
-    '- Prioritise measurable outcomes over responsibilities',
-    '- Minimum 2 bullets per role, minimum 5 for MTAA and IndustraCom',
-    '- Include all 7 roles (2008-2025)',
-    '- Profile starts with "Most marketers specialise. I\'ve spent 18+ years doing all of it..."',
-    '- Closing personal line in profile: clever, role-specific, one sentence, make reader smirk or nod',
-    '- No em dashes, Australian English, 2 pages max',
-    '',
-    'COVER LETTER VOICE (locked):',
-    '- Direct, conversational, slightly opinionated',
-    '- First 1-2 paragraphs answer "why this role / why this company" explicitly',
-    '- Concrete proof points from MTAA / IndustraCom with real numbers',
-    '- Address obvious gaps on own terms',
-    '- Include AI paragraph citing the n8n job pipeline with marketing-equivalent use cases',
-    '- Forward-looking close',
-    '- No em dashes, Australian English, 250-400 words, one A4 page',
-    '- Salutation: "Hi Hiring Manager"',
-    '- Sign off: "Louie Radburnd" only',
-    '- No bold colon-format headings in the body',
-    '',
-    'OUTPUT FORMAT: one block per job using exact delimiters:',
-    '',
-    '<<< RESULT rowId=N >>>',
-    '=== COVER LETTER ===',
-    '[cover letter markdown]',
-    '=== END COVER LETTER ===',
-    '=== RESUME ===',
-    '[resume markdown]',
-    '=== END RESUME ===',
-    '<<< END RESULT N >>>',
-    '',
-    'IMPORTANT:',
-    '- Output only the RESULT blocks, no commentary between them',
-    '- Each job gets its own complete resume + cover letter',
-    '- Do not reference other jobs inside a RESULT block'
-  ].join('\n');
-}
-
-function buildBatchInterviewPrepPrompt(rowIds) {
-  if (!rowIds || !rowIds.length) return 'No row IDs provided.';
-  const rows = rowIds.map(function (id) { return getRow(id).row; }).filter(Boolean);
-  if (!rows.length) return 'No valid rows found for the given IDs.';
-
-  const jobsBlock = rows.map(function (r) {
-    const intel = r.companyIntel || {};
-    const mi = intel.marketingInsights || {};
-    return '<<< JOB rowId=' + r.rowId + ' >>>\n' +
-           'ROLE: ' + (r.role || '') + '\n' +
-           'COMPANY: ' + (r.company || '') + '\n' +
-           'URL: ' + (r.url || '') + '\n' +
-           'KEY NOTES: ' + (r.keyNotes || '') + '\n' +
-           'KEY ALIGNMENTS: ' + (r.keyAlignments || '') + '\n' +
-           'POTENTIAL CONCERNS: ' + (r.potentialConcerns || '') + '\n' +
-           'TAILORED PITCH: ' + (r.tailoredPitch || '') + '\n' +
-           'COMPANY INTEL: ' + JSON.stringify({ industry: intel.industry, positioning: mi.positioning, competitors: mi.competitors, teamSignals: mi.teamSignals }) + '\n' +
-           '<<< END JOB ' + r.rowId + ' >>>';
-  }).join('\n\n');
-
-  return [
-    'Generate interview prep for ' + rows.length + ' role' + (rows.length > 1 ? 's' : '') + ' Louie has applied for. Return one JSON object per job using the exact delimiter format.',
-    '',
-    'JOBS:',
-    '',
-    jobsBlock,
-    '',
-    'FOR EACH JOB, produce a JSON object with this shape:',
-    '{',
-    '  "generatedAt": "<ISO 8601>",',
-    '  "questions": [',
-    '    {"id":"q1","text":"...","context":"...","preparedAnswer":"...","status":"not_practiced","currentRound":0,"rounds":[]},',
-    '    ...8-12 questions total',
-    '  ],',
-    '  "anticipatedQuestions": ["..."],',
-    '  "companyDeepDive": {"culture":"...","recentNews":"...","leadershipSignals":"..."},',
-    '  "talkingPoints": ["..."]',
-    '}',
-    '',
-    'QUESTION MIX (aim for 8-12 per job):',
-    '- 3-4 role-specific behavioural questions tied to the job\'s key alignments',
-    '- 2-3 "why this company" / "why this role" angles',
-    '- 1-2 addressing potential concerns openly',
-    '- 2-3 classic leadership or competency questions relevant to the seniority',
-    '',
-    'ANTI-HALLUCINATION RULES:',
-    '- Do NOT invent metrics, dates, or story details. Use only what is verified in Louie\'s career (18+ years, MTAA conference $214k to $815k, 200 to 16k LinkedIn, 90% renewal, 42% associate growth, IndustraCom -10 to +2 per month, 15% YoY revenue, 22% SEO lift, RegConnect 6-week build, etc.)',
-    '- Leave preparedAnswer as a framework or prompt (e.g. "Use MTAA renewal story: situation/task/action/result"), not a fabricated STAR narrative',
-    '- No em dashes, Australian English',
-    '',
-    'OUTPUT FORMAT: one block per job using exact delimiters:',
-    '',
-    '<<< RESULT rowId=N >>>',
-    '{ valid JSON object }',
-    '<<< END RESULT N >>>',
-    '',
-    'IMPORTANT:',
-    '- Output only RESULT blocks',
-    '- JSON must be valid and parseable, no trailing commas, no comments inside JSON'
-  ].join('\n');
-}
-
-
-// ============================================================
-// BATCH SAVE HANDLERS
-// ============================================================
-
-/**
- * Parse a batch response into per-rowId blocks.
- *
- * FIX 23-Apr-2026: The previous version used a regex backreference
- * `\1` to match the closing delimiter. On large responses (three jobs,
- * ~8kb each, all in one paste) that backreference caused catastrophic
- * regex backtracking in V8's engine — Apps Script ran past its execution
- * budget and the browser saw it as "Failed to fetch".
- *
- * New approach: find RESULT open delimiters linearly, then for each one
- * search forward for the MATCHING END delimiter by rowId. No backrefs,
- * no lazy-greedy traps. Order-agnostic and tolerant of nested delimiters.
- */
-function parseBatchResponse(raw) {
-  const result = {};
-  if (!raw) return result;
-  let text = String(raw);
-
-  // Strip common markdown wrappers Claude sometimes adds — code fences
-  // around the whole response, triple backticks on individual blocks, etc.
-  // The parser is delimiter-based so the fences would prevent match.
-  text = text.replace(/```[a-z]*\n?/gi, '').replace(/```/g, '');
-
-  // Find all open tags with their rowId and position. Regex is tolerant
-  // of extra whitespace and the rowId attribute being quoted/unquoted.
-  const openRe = /<<<\s*RESULT\s+rowId\s*=\s*"?(\d+)"?\s*>>>/g;
-  const opens = [];
-  let m;
-  while ((m = openRe.exec(text)) !== null) {
-    opens.push({ rowId: m[1], start: m.index, contentStart: m.index + m[0].length });
-  }
-
-  // For each open, find its matching END RESULT N (tolerant matching)
-  opens.forEach(function (o) {
-    const endPattern = '<<<\\s*END\\s+RESULT\\s+' + o.rowId + '\\s*>>>';
-    const endRe = new RegExp(endPattern);
-    const slice = text.substring(o.contentStart);
-    const endMatch = slice.match(endRe);
-    if (endMatch) {
-      const content = slice.substring(0, endMatch.index).trim();
-      result[o.rowId] = content;
-    }
+  // Follow-up needed: Applied cards >7 days old, oldest first, max 1
+  const followUps = pipeline.filter(function (r) {
+    if (r.status !== 'Applied') return false;
+    const days = daysSince(r.applicationDate);
+    return days !== null && days > 7;
+  }).sort(function (a, b) {
+    return (daysSince(b.applicationDate) || 0) - (daysSince(a.applicationDate) || 0);
   });
+  if (followUps.length > 0) {
+    const pick = followUps[0];
+    const days = daysSince(pick.applicationDate) || 0;
+    tasks.push({
+      id: 'followup-' + pick.rowId,
+      type: 'followup',
+      rowId: pick.rowId,
+      done: false,
+      title: 'Follow up on ' + pick.company,
+      subtitle: 'Applied ' + days + ' days ago — time to nudge',
+      actionLabel: 'Draft email',
+      action: { kind: 'openCard', rowId: pick.rowId }
+    });
+  }
 
+  // Rejection learning: any Rejected card from last 7 days
+  const recentRejections = pipeline.filter(function (r) {
+    if (r.status !== 'Rejected') return false;
+    const days = daysSince(r.lastActivity);
+    return days !== null && days <= 7;
+  });
+  if (recentRejections.length > 0 && tasks.length < 5) {
+    const pick = recentRejections[0];
+    tasks.push({
+      id: 'rejection-lesson-' + pick.rowId,
+      type: 'rejectionLesson',
+      rowId: pick.rowId,
+      done: false,
+      title: 'Note a lesson from ' + pick.company,
+      subtitle: 'What can you take from this one?',
+      actionLabel: 'Add note',
+      action: { kind: 'openCard', rowId: pick.rowId, tab: 'notes' }
+    });
+  }
+
+  // Queue analysis: if ≥3 items in intake queue
+  const queueCount = state.queueCount || (state.queue || []).length;
+  if (queueCount >= 3 && tasks.length < 5) {
+    tasks.push({
+      id: 'queue-analyse-' + isoToday(),
+      type: 'queueAnalyse',
+      done: false,
+      title: 'Analyse ' + Math.min(queueCount, 3) + ' jobs from the queue',
+      subtitle: queueCount + ' jobs waiting to be processed',
+      actionLabel: 'Open queue',
+      action: { kind: 'scrollToQueue' }
+    });
+  }
+
+  // Stale refresh: oldest Analysed card >10 days
+  const stale = pipeline.filter(function (r) {
+    if (r.status !== 'Analysed') return false;
+    const days = daysSince(r.stageEnteredAt || r.dateAdded);
+    return days !== null && days > 10;
+  }).sort(function (a, b) {
+    const da = daysSince(a.stageEnteredAt || a.dateAdded) || 0;
+    const db = daysSince(b.stageEnteredAt || b.dateAdded) || 0;
+    return db - da;
+  });
+  if (stale.length > 0 && tasks.length < 5) {
+    const pick = stale[0];
+    const days = daysSince(pick.stageEnteredAt || pick.dateAdded) || 0;
+    tasks.push({
+      id: 'stale-' + pick.rowId,
+      type: 'stale',
+      rowId: pick.rowId,
+      done: false,
+      title: 'Decide on ' + pick.company,
+      subtitle: 'Sitting in Analysed for ' + days + ' days — apply, refresh, or archive',
+      actionLabel: 'Open card',
+      action: { kind: 'openCard', rowId: pick.rowId }
+    });
+  }
+
+  // STAR practice — always include if there\'s space
+  if (tasks.length < 5) {
+    tasks.push({
+      id: 'star-practice-' + isoToday(),
+      type: 'starPractice',
+      done: false,
+      title: 'Practice 1 STAR story',
+      subtitle: 'Pick one from your bank and rehearse out loud',
+      actionLabel: 'Open STAR bank',
+      action: { kind: 'external', url: 'https://claude.ai' }
+    });
+  }
+
+  return tasks;
+}
+
+/**
+ * Get or generate today\'s task state. Rolls over at local midnight.
+ * Handles pause logic: if paused, returns empty task list but keeps
+ * streak visible.
+ */
+function getTodayTasks() {
+  if (state.todayCache && state.todayCache._date === isoToday()) {
+    return state.todayCache;
+  }
+  const stored = loadTodayState();
+  const today = isoToday();
+  let tasks, streak = stored.streak || 0, lastCompleted = stored.lastCompleted;
+
+  // Streak decay: if last-completed was >1 day ago, reset streak
+  if (lastCompleted && daysBetweenIso(lastCompleted, today) > 1) {
+    streak = 0;
+  }
+
+  // Pause check
+  const paused = stored.pausedUntil && stored.pausedUntil > today;
+
+  if (paused) {
+    tasks = [];
+  } else if (stored.date === today && Array.isArray(stored.tasks) && stored.tasks.length > 0) {
+    tasks = stored.tasks;
+  } else {
+    tasks = generateTodayTasks();
+  }
+
+  const result = {
+    _date: today,
+    tasks: tasks,
+    streak: streak,
+    lastCompleted: lastCompleted,
+    paused: paused,
+    pausedUntil: stored.pausedUntil
+  };
+  state.todayCache = result;
+  // Persist the fresh task list so refresh doesn\'t regenerate
+  if (!paused && (stored.date !== today || !Array.isArray(stored.tasks) || stored.tasks.length === 0)) {
+    saveTodayState({
+      date: today,
+      tasks: tasks,
+      streak: streak,
+      lastCompleted: lastCompleted,
+      pausedUntil: stored.pausedUntil || null
+    });
+  }
   return result;
 }
 
-/**
- * Coerce whatever recommendation value Claude produced into one of the
- * three values the sheet\'s data validation allows: APPLY, CONSIDER, SKIP.
- * Anything unknown defaults to CONSIDER — safer than failing the write.
- */
-function normaliseRecommendation(raw) {
-  if (!raw) return '';
-  const v = String(raw).trim().toUpperCase();
-  if (v === 'APPLY') return 'APPLY';
-  if (v === 'CONSIDER') return 'CONSIDER';
-  if (v === 'SKIP') return 'SKIP';
-  // Map older / friendlier phrasings to the canonical three values
-  if (v === 'STRONGLY APPLY' || v === 'STRONG APPLY' || v.indexOf('STRONG') > -1) return 'APPLY';
-  if (v === 'PASS' || v === 'REJECT' || v === 'NO') return 'SKIP';
-  if (v === 'MAYBE' || v === 'POSSIBLY' || v === 'UNSURE') return 'CONSIDER';
-  // Fallback — if Claude sent something weird, default to CONSIDER so the
-  // write doesn\'t get rejected by the data validation rule on col E.
-  return 'CONSIDER';
-}
-
-/**
- * Coerce whatever application priority value Claude produced into one of
- * the three values the sheet\'s data validation allows: HIGH, MEDIUM, LOW.
- * Anything unknown defaults to MEDIUM.
- */
-function normalisePriority(raw) {
-  if (!raw) return '';
-  const v = String(raw).trim().toUpperCase();
-  if (v === 'HIGH' || v === 'H') return 'HIGH';
-  if (v === 'MEDIUM' || v === 'MED' || v === 'M') return 'MEDIUM';
-  if (v === 'LOW' || v === 'L') return 'LOW';
-  // Map common variants
-  if (v === 'URGENT' || v === 'TOP' || v === 'CRITICAL') return 'HIGH';
-  if (v === 'MODERATE' || v === 'STANDARD' || v === 'NORMAL') return 'MEDIUM';
-  if (v === 'MINIMAL' || v === 'MINOR' || v === 'OPTIONAL') return 'LOW';
-  // Fallback
-  return 'MEDIUM';
-}
-
-/**
- * Extract a FIELD: value from a batch result block. Values may span
- * multiple lines — the value continues until either the next "FIELD:"
- * line or the end of the block. This is more forgiving than requiring
- * Claude to produce single-line values for every field.
- */
-function parseField(block, field) {
-  // Match FIELD: at line start, capture everything up to either the next
-  // ALLCAPS_WITH_UNDERSCORES: line or the end of the block. The lookahead
-  // prevents the regex from eating the next field\'s label.
-  const re = new RegExp('^' + field + ':\\s*([\\s\\S]*?)(?=\\n[A-Z_]+:|$)', 'm');
-  const m = block.match(re);
-  return m ? m[1].trim() : '';
-}
-
-function batchSaveAnalyse(body) {
-  const parsed = parseBatchResponse(body.response || '');
-  const rowIds = Object.keys(parsed);
-  if (!rowIds.length) {
-    // Return a preview of what came through so the user can see why parsing
-    // failed. Common cases: response didn't include the delimiter tags,
-    // rowId number didn't match, or Claude wrapped everything in prose.
-    const preview = (body.response || '').substring(0, 240).replace(/\n/g, ' ').trim();
-    return {
-      ok: false,
-      error: 'No valid RESULT blocks found. Check the response includes <<< RESULT rowId=N >>> delimiters. First 240 chars: "' + preview + '..."'
-    };
+function toggleTodayTask(taskId) {
+  const current = getTodayTasks();
+  if (current.paused) return;
+  current.tasks = current.tasks.map(function (t) {
+    if (t.id === taskId) t.done = !t.done;
+    return t;
+  });
+  // Streak bookkeeping: if completion rate >= threshold AND last completed
+  // wasn\'t already today, increment streak.
+  const done = current.tasks.filter(function (t) { return t.done; }).length;
+  const rate = current.tasks.length > 0 ? (done / current.tasks.length) : 0;
+  if (rate >= TODAY_MIN_FOR_STREAK && current.lastCompleted !== current._date) {
+    current.streak = (current.streak || 0) + 1;
+    current.lastCompleted = current._date;
+  } else if (rate < TODAY_MIN_FOR_STREAK && current.lastCompleted === current._date) {
+    // Un-checked back below threshold — revert
+    current.streak = Math.max(0, (current.streak || 0) - 1);
+    current.lastCompleted = null;
   }
-
-  const sheet = openPipeline();
-  const saved = [];
-  const skipped = [];
-
-  rowIds.forEach(function (rowIdStr) {
-    const rowId = parseInt(rowIdStr, 10);
-    const block = parsed[rowIdStr];
-
-    try {
-      const fitScore = parseField(block, 'FIT_SCORE');
-      const recommendation = normaliseRecommendation(parseField(block, 'RECOMMENDATION'));
-      const keyNotes = parseField(block, 'KEY_NOTES');
-      const keyAlignments = parseField(block, 'KEY_ALIGNMENTS');
-      const potentialConcerns = parseField(block, 'POTENTIAL_CONCERNS');
-      const applicationPriority = normalisePriority(parseField(block, 'APPLICATION_PRIORITY'));
-      const tailoredPitch = parseField(block, 'TAILORED_PITCH');
-      const personalAngle = parseField(block, 'PERSONAL_ANGLE');
-      const companyIntel = parseField(block, 'COMPANY_INTEL');
-
-      if (fitScore) sheet.getRange(rowId, COL.FIT_SCORE).setValue(fitScore);
-      if (recommendation) sheet.getRange(rowId, COL.RECOMMENDATION).setValue(recommendation);
-      if (keyNotes) sheet.getRange(rowId, COL.KEY_NOTES).setValue(keyNotes);
-      if (keyAlignments) sheet.getRange(rowId, COL.KEY_ALIGNMENTS).setValue(keyAlignments);
-      if (potentialConcerns) sheet.getRange(rowId, COL.POTENTIAL_CONCERNS).setValue(potentialConcerns);
-      if (applicationPriority) sheet.getRange(rowId, COL.APPLICATION_PRIORITY).setValue(applicationPriority);
-      if (tailoredPitch) sheet.getRange(rowId, COL.TAILORED_PITCH).setValue(tailoredPitch);
-      if (personalAngle) sheet.getRange(rowId, COL.PERSONAL_ANGLE).setValue(personalAngle);
-      if (companyIntel) sheet.getRange(rowId, COL.COMPANY_INTEL).setValue(companyIntel);
-
-      sheet.getRange(rowId, COL.ANALYSIS_DATE).setValue(new Date());
-      sheet.getRange(rowId, COL.LAST_ACTIVITY).setValue(new Date());
-      saved.push(rowId);
-    } catch (e) {
-      skipped.push({ rowId: rowId, error: String(e) });
-    }
+  saveTodayState({
+    date: current._date,
+    tasks: current.tasks,
+    streak: current.streak,
+    lastCompleted: current.lastCompleted,
+    pausedUntil: current.pausedUntil || null
   });
-
-  return { ok: true, saved: saved, skipped: skipped };
-}
-
-function batchSaveGenerateDocs(body) {
-  const parsed = parseBatchResponse(body.response || '');
-  const rowIds = Object.keys(parsed);
-  if (!rowIds.length) return { ok: false, error: 'No valid RESULT blocks found in response' };
-
-  const sheet = openPipeline();
-  const saved = [];
-  const skipped = [];
-
-  rowIds.forEach(function (rowIdStr) {
-    const rowId = parseInt(rowIdStr, 10);
-    const block = parsed[rowIdStr];
-
-    try {
-      const clMatch = block.match(/=== COVER LETTER ===([\s\S]*?)=== END COVER LETTER ===/);
-      const resMatch = block.match(/=== RESUME ===([\s\S]*?)=== END RESUME ===/);
-
-      if (!clMatch || !resMatch) {
-        skipped.push({ rowId: rowId, error: 'Missing cover letter or resume delimiters' });
-        return;
-      }
-
-      const coverLetter = clMatch[1].trim();
-      const resume = resMatch[1].trim();
-
-      sheet.getRange(rowId, COL.COVER_LETTER_MD).setValue(coverLetter);
-      sheet.getRange(rowId, COL.RESUME_MD).setValue(resume);
-      setStatusWithTimestamp(sheet, rowId, 'Ready to Apply');
-      saved.push(rowId);
-    } catch (e) {
-      skipped.push({ rowId: rowId, error: String(e) });
-    }
+  state.todayCache = current;
+  renderTodayModal();
+  // Re-render ALL today-pill instances — there may be two in the DOM
+  // (top-bar copy + drawer-copy when hamburger is open). Replace each.
+  const pills = document.querySelectorAll('.today-pill');
+  const newHtml = renderTodayPill();
+  pills.forEach(function (p) {
+    const wrap = document.createElement('div');
+    wrap.innerHTML = newHtml;
+    const fresh = wrap.firstChild;
+    if (fresh && p.parentElement) p.parentElement.replaceChild(fresh, p);
   });
-
-  return { ok: true, saved: saved, skipped: skipped };
 }
 
-function batchSaveInterviewPrep(body) {
-  const parsed = parseBatchResponse(body.response || '');
-  const rowIds = Object.keys(parsed);
-  if (!rowIds.length) return { ok: false, error: 'No valid RESULT blocks found in response' };
-
-  const sheet = openPipeline();
-  const saved = [];
-  const skipped = [];
-
-  rowIds.forEach(function (rowIdStr) {
-    const rowId = parseInt(rowIdStr, 10);
-    const block = parsed[rowIdStr];
-
-    try {
-      JSON.parse(block);
-      sheet.getRange(rowId, COL.INTERVIEW_PREP).setValue(block);
-      sheet.getRange(rowId, COL.LAST_ACTIVITY).setValue(new Date());
-      saved.push(rowId);
-    } catch (e) {
-      skipped.push({ rowId: rowId, error: 'Invalid JSON: ' + String(e) });
-    }
+function skipTodayTasks() {
+  const today = isoToday();
+  saveTodayState({
+    date: today,
+    tasks: [],
+    streak: state.todayCache ? state.todayCache.streak : 0,
+    lastCompleted: state.todayCache ? state.todayCache.lastCompleted : null,
+    pausedUntil: null
   });
-
-  return { ok: true, saved: saved, skipped: skipped };
+  state.todayCache = null;
+  closeTodayModal();
+  render();
 }
 
-
-// ============================================================
-// UTILITIES
-// ============================================================
-
-function openPipeline() {
-  return SpreadsheetApp.openById(SHEET_ID).getSheetByName(PIPELINE_TAB);
+function pauseTodayForWeek() {
+  const today = isoToday();
+  const pausedUntil = new Date();
+  pausedUntil.setDate(pausedUntil.getDate() + 7);
+  const pausedIso = pausedUntil.getFullYear() + '-' +
+    String(pausedUntil.getMonth() + 1).padStart(2, '0') + '-' +
+    String(pausedUntil.getDate()).padStart(2, '0');
+  saveTodayState({
+    date: today,
+    tasks: [],
+    streak: state.todayCache ? state.todayCache.streak : 0,
+    lastCompleted: state.todayCache ? state.todayCache.lastCompleted : null,
+    pausedUntil: pausedIso
+  });
+  state.todayCache = null;
+  closeTodayModal();
+  toast('Paused for a week. Streak preserved.', 'success');
+  render();
 }
 
-function openQueue() {
-  const ss = SpreadsheetApp.openById(SHEET_ID);
-  var sheet = ss.getSheetByName(QUEUE_TAB);
-  if (!sheet) {
-    sheet = ss.insertSheet(QUEUE_TAB);
-    sheet.getRange(1, 1, 1, 4).setValues([['id', 'url', 'content', 'added_at']]);
+function resumeToday() {
+  const today = isoToday();
+  saveTodayState({
+    date: today,
+    tasks: generateTodayTasks(),
+    streak: state.todayCache ? state.todayCache.streak : 0,
+    lastCompleted: state.todayCache ? state.todayCache.lastCompleted : null,
+    pausedUntil: null
+  });
+  state.todayCache = null;
+  renderTodayModal();
+  render();
+}
+
+function openTodayModal() {
+  state.todayModalOpen = true;
+  renderTodayModal();
+}
+function closeTodayModal() {
+  state.todayModalOpen = false;
+  const root = document.getElementById('modal-root');
+  // Don\'t clobber other modals
+  const existing = root.querySelector('.today-modal-overlay');
+  if (existing) existing.remove();
+  document.body.classList.remove('modal-open');
+}
+
+function handleTodayAction(taskId) {
+  const current = getTodayTasks();
+  const task = current.tasks.find(function (t) { return t.id === taskId; });
+  if (!task || !task.action) return;
+  const act = task.action;
+  closeTodayModal();
+  if (act.kind === 'openCard') {
+    if (act.tab) state.selectedTab = act.tab;
+    openCardDetail(act.rowId);
+  } else if (act.kind === 'scrollToQueue') {
+    const q = document.querySelector('.queue-strip');
+    if (q) q.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else if (act.kind === 'external') {
+    window.open(act.url, '_blank');
   }
-  return sheet;
 }
 
-function detectSource(url) {
-  if (!url) return 'Other';
-  const u = String(url).toLowerCase();
-  if (u.indexOf('seek.com') > -1)     return 'Seek';
+function renderTodayModal() {
+  if (!state.todayModalOpen) return;
+  const root = document.getElementById('modal-root');
+  let host = root.querySelector('.today-modal-overlay');
+  if (!host) {
+    host = document.createElement('div');
+    host.className = 'today-modal-overlay';
+    host.onclick = function (e) { if (e.target === host) closeTodayModal(); };
+    root.appendChild(host);
+    document.body.classList.add('modal-open');
+  }
+  const today = getTodayTasks();
+  const done = today.tasks.filter(function (t) { return t.done; }).length;
+  const total = today.tasks.length;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  const header =
+    '<div class="today-modal-header">' +
+      '<div>' +
+        '<p class="today-modal-eyebrow">Today · ' + new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' }) + '</p>' +
+        '<p class="today-modal-title">' + (total > 0 ? (done + ' of ' + total + ' done') : (today.paused ? 'Paused for the week' : 'No tasks today')) + '</p>' +
+      '</div>' +
+      '<button class="modal-close" onclick="closeTodayModal()" aria-label="Close">✕</button>' +
+    '</div>';
+
+  const progress = total > 0
+    ? '<div class="today-progress">' +
+        '<div class="today-progress-bar"><div class="today-progress-fill" style="width:' + pct + '%;"></div></div>' +
+        '<div class="today-progress-meta">' +
+          '<span class="today-progress-pct">' + pct + '%</span>' +
+          (today.streak >= 1 ? '<span class="today-streak">🔥 ' + today.streak + '-day streak</span>' : '<span class="today-streak-placeholder">Complete ' + Math.ceil(total * TODAY_MIN_FOR_STREAK) + '+ tasks to start a streak</span>') +
+        '</div>' +
+      '</div>'
+    : '';
+
+  const taskList = total > 0
+    ? '<div class="today-tasks">' +
+        today.tasks.map(function (t) {
+          return (
+            '<div class="today-task ' + (t.done ? 'done' : '') + '">' +
+              '<button class="today-task-check" onclick="toggleTodayTask(\'' + t.id + '\')" aria-label="' + (t.done ? 'Mark incomplete' : 'Mark complete') + '">' +
+                (t.done
+                  ? '<svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 10 8 14 16 6"/></svg>'
+                  : '') +
+              '</button>' +
+              '<div class="today-task-body">' +
+                '<p class="today-task-title">' + escapeHtml(t.title) + '</p>' +
+                '<p class="today-task-subtitle">' + escapeHtml(t.subtitle) + '</p>' +
+                (t.actionLabel ? '<button class="today-task-action" onclick="handleTodayAction(\'' + t.id + '\')">' + escapeHtml(t.actionLabel) + ' →</button>' : '') +
+              '</div>' +
+            '</div>'
+          );
+        }).join('') +
+      '</div>'
+    : (today.paused
+        ? '<div class="today-empty">' +
+            '<p>Paused until ' + today.pausedUntil + '. Streak preserved.</p>' +
+            '<button onclick="resumeToday()">Resume now</button>' +
+          '</div>'
+        : '<div class="today-empty">' +
+            '<p>Nothing urgent today. Go do something else.</p>' +
+          '</div>');
+
+  const footer = (total > 0 && !today.paused)
+    ? '<div class="today-modal-footer">' +
+        '<button class="ghost" onclick="skipTodayTasks()">Skip today</button>' +
+        '<button class="ghost" onclick="pauseTodayForWeek()">Pause for a week</button>' +
+      '</div>'
+    : '';
+
+  host.innerHTML =
+    '<div class="today-modal" onclick="event.stopPropagation()">' +
+      header +
+      '<div class="today-modal-body">' +
+        progress +
+        taskList +
+      '</div>' +
+      footer +
+    '</div>';
+}
+
+function groupByColumn() {
+  const groups = {
+    'Potential':  { active: [], holding: [] },
+    'Applied':    { active: [], holding: [] },
+    'Engagement': { active: [], holding: [] }
+  };
+  const q = (state.search || '').trim().toLowerCase();
+  state.pipeline.forEach(function (r) {
+    if (q) {
+      const haystack = (r.company + ' ' + r.role + ' ' + (r.location || '')).toLowerCase();
+      if (haystack.indexOf(q) === -1) return;
+    }
+    let col = columnForStatus(r.status);
+
+    // Rejected cards that reached an interview stage belong in Engagement;
+    // other Rejected cards stay in Archive. Same for any card Withdrawn
+    // AFTER reaching interview — but for now only Rejected is handled.
+    if (!col && rejectedReachedInterview(r)) col = 'Engagement';
+
+    if (!col && isHoldingStatus(r.status)) {
+      // Holding cards inherit the column they were last active in. Best-effort
+      // inference from existing row data — applicationDate means they were
+      // Applied or later; resume/cover letter means they were Ready to Apply
+      // (which belongs to Potential now).
+      if (r.applicationDate) col = 'Applied';
+      else col = 'Potential';
+    }
+    if (col) {
+      if (isHoldingStatus(r.status)) groups[col].holding.push(r);
+      else groups[col].active.push(r);
+    }
+  });
+
+  Object.keys(groups).forEach(function (col) {
+    const fn = getSortFn(state.sortBy[col] || 'score-desc');
+    groups[col].active.sort(fn);
+    groups[col].holding.sort(fn);
+  });
+  return groups;
+}
+
+function sourceBreakdown(queue) {
+  const counts = {};
+  queue.forEach(function (item) { counts[item.source] = (counts[item.source] || 0) + 1; });
+  return Object.keys(counts).map(function (k) { return counts[k] + ' ' + k; }).join(' · ');
+}
+
+function practiceCounts(questions) {
+  return {
+    nailed: questions.filter(function (q) { return q.status === 'nailed'; }).length,
+    inProgress: questions.filter(function (q) { return q.status === 'in_progress'; }).length,
+    notPracticed: questions.filter(function (q) { return q.status === 'not_practiced' || !q.status; }).length
+  };
+}
+
+function isHoldingStatus(s) { return ['On Hold', 'Unsure', 'Rethink'].indexOf(s) > -1; }
+function isArchivedStatus(s) { return ['Rejected', 'Withdrawn'].indexOf(s) > -1; }
+function isAppliedSubStatus(s) { return ['Applied', 'Interviewing', 'Interviewed', 'Offer', 'Accepted'].indexOf(s) > -1; }
+
+/**
+ * True if this card has EVER been Applied or any later substage. Drives
+ * the forward-only lock: once a card has hit Applied, it cannot be moved
+ * back to Analysed or Ready to Apply (only laterally to Interviewing,
+ * Rejected, Withdrawn etc).
+ *
+ * Note: current status alone isn\'t enough to answer this. A Withdrawn
+ * card could be from either pre-applied (user walked away before applying)
+ * OR post-applied (user pulled out of an active application). Rejected
+ * likewise. The only reliable signal is the status history — did any
+ * past entry reach an applied substatus?
+ */
+function hasBeenApplied(row) {
+  if (isAppliedSubStatus(row.status)) return true;
+  const history = Array.isArray(row.statusHistory) ? row.statusHistory : [];
+  return history.some(function (h) { return isAppliedSubStatus(h.status); });
+}
+
+/**
+ * Compact status timeline strip rendered above the tab body. Only shown
+ * for cards that have a meaningful journey (>1 status entry) — first-time
+ * Analysed cards have nothing to show.
+ *
+ * Visual: horizontal sequence of small status pills with the date/relative
+ * time below each. The current status is bolded and gets the "now" label.
+ */
+function renderStatusTimeline(row) {
+  const history = Array.isArray(row.statusHistory) ? row.statusHistory : [];
+
+  // Show the section whenever there's ≥1 entry OR the user might want to
+  // add their own. Hide only for brand-new Analysed cards with no history
+  // at all — on those, the timeline would be redundant (current status is
+  // already visible in the header).
+  const showTimeline = history.length >= 2;
+  const showEdit = history.length >= 1; // Edit is allowed for any card with history
+
+  if (!showTimeline && !showEdit) return '';
+
+  const itemsHtml = showTimeline
+    ? history.map(function (h, i) {
+        const info = getStatusInfo(h.status);
+        const isCurrent = i === history.length - 1;
+        const dateStr = h.at ? timeSince(h.at) : '';
+        const label = isCurrent && dateStr ? dateStr + ' · now' : dateStr;
+        return (
+          '<div class="timeline-step' + (isCurrent ? ' current' : '') + '">' +
+            '<span class="pill-status ' + info.cls + '"><span class="icon">' + info.icon + '</span>' + escapeHtml(h.status) + '</span>' +
+            (label ? '<span class="timeline-when">' + escapeHtml(label) + '</span>' : '') +
+          '</div>'
+        );
+      }).join('<span class="timeline-arrow">→</span>')
+    : '<p class="small-meta" style="margin:0;font-style:italic;">No journey entries yet — click Edit to add them.</p>';
+
+  return (
+    '<div class="status-timeline">' +
+      '<div class="timeline-header">' +
+        '<p class="timeline-label">Journey</p>' +
+        '<div style="display:flex;gap:6px;align-items:center;">' +
+          '<button class="accent small outcome-trigger" onclick="toggleOutcomePopover(event,' + row.rowId + ')">' +
+            'Log outcome <span style="font-size:9px;opacity:0.8;">▾</span>' +
+          '</button>' +
+          '<button class="small ghost timeline-edit-btn" onclick="openEditJourneyModal(' + row.rowId + ')">Edit</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="timeline-track">' + itemsHtml + '</div>' +
+    '</div>'
+  );
+}
+
+function inferApplyMethod(url) {
+  if (!url) return 'Unknown';
+  const u = url.toLowerCase();
   if (u.indexOf('linkedin.com') > -1) return 'LinkedIn';
-  if (u.indexOf('indeed.com') > -1)   return 'Indeed';
-  return 'Other';
+  if (u.indexOf('seek.com') > -1) return 'Seek';
+  return 'Company site';
 }
 
-function parseJSONSafe(val) {
-  if (!val) return null;
-  if (typeof val === 'object') return val;
-  try { return JSON.parse(String(val)); }
-  catch (e) { return { _raw: String(val), _parseError: true }; }
+function toPreviewUrl(url) {
+  if (!url) return '';
+  const match = url.match(/\/document\/d\/([^\/\?]+)/);
+  if (match) return 'https://docs.google.com/document/d/' + match[1] + '/preview';
+  return url;
 }
 
-function jsonResponse(obj) {
-  return ContentService
-    .createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
+function timeSince(date) {
+  if (!date) return '';
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '';
+  if (d.getFullYear() < 2000) return '';
+  const s = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s / 60) + ' min ago';
+  if (s < 86400) return Math.floor(s / 3600) + ' h ago';
+  if (s < 86400 * 30) return Math.floor(s / 86400) + ' d ago';
+  return d.toISOString().split('T')[0];
 }
 
-function now() {
-  return new Date().toISOString();
+function truncate(str, n) {
+  if (!str) return '';
+  return str.length > n ? str.substr(0, n - 1) + '…' : str;
 }
 
-function generateId() {
-  return 'q_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 6);
+function capitalise(str) {
+  if (!str) return '';
+  return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-
-// ============================================================
-// TEST HARNESS
-// ============================================================
-
-function _testPing() {
-  Logger.log(getPipeline());
+// Mobile UI toggle helpers — each flips a state flag and re-renders
+function toggleMobileStats() {
+  state.mobileStatsExpanded = !state.mobileStatsExpanded;
+  render();
 }
-
-function _testGetQueue() {
-  Logger.log(getQueue());
-}
-
-function _testBuildAnalyse() {
-  Logger.log(buildAnalysePrompt());
-}
-
-/**
- * Verify the new batch parser handles a multi-job response without hanging.
- * Run from Apps Script editor: function dropdown → _testBatchParser → Run.
- * Should log 3 rowIds and their content lengths in under a second.
- */
-function _testBatchParser() {
-  const sample =
-    '<<< RESULT rowId=15 >>>\nFIT_SCORE: 7.2\nRECOMMENDATION: Apply\n<<< END RESULT 15 >>>\n' +
-    '<<< RESULT rowId=30 >>>\nFIT_SCORE: 7.8\nRECOMMENDATION: Apply\n<<< END RESULT 30 >>>\n' +
-    '<<< RESULT rowId=60 >>>\nFIT_SCORE: 7.5\nRECOMMENDATION: Apply\n<<< END RESULT 60 >>>';
-  const parsed = parseBatchResponse(sample);
-  Logger.log('Parsed rowIds: ' + Object.keys(parsed).join(','));
-  Object.keys(parsed).forEach(function (k) {
-    Logger.log('  ' + k + ' — ' + parsed[k].length + ' chars');
-  });
-  return parsed;
-}
-
-
-// ============================================================
-// ONE-OFF BACKFILL (run once after adding STAGE_ENTERED_AT column)
-// ============================================================
-
-function _backfillStageEnteredAt() {
-  const sheet = openPipeline();
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) { Logger.log('No data rows'); return; }
-
-  const range = sheet.getRange(2, 1, lastRow - 1, TOTAL_COLS);
-  const values = range.getValues();
-  let updated = 0;
-  let skipped = 0;
-
-  values.forEach(function (r, i) {
-    const rowNum = i + 2;
-    if (r[COL.STAGE_ENTERED_AT - 1]) { skipped++; return; }
-
-    const status = r[COL.STATUS - 1];
-    let proxy = null;
-
-    if (['Applied', 'Interviewing', 'Interviewed', 'Offer', 'Accepted'].indexOf(status) > -1) {
-      proxy = r[COL.APPLICATION_DATE - 1] || r[COL.LAST_ACTIVITY - 1];
-    } else if (status === 'Analysed') {
-      proxy = r[COL.ANALYSIS_DATE - 1] || r[COL.DATE_ADDED - 1] || r[COL.LAST_ACTIVITY - 1];
-    } else {
-      proxy = r[COL.LAST_ACTIVITY - 1] || r[COL.DATE_ADDED - 1];
-    }
-
-    if (proxy) {
-      sheet.getRange(rowNum, COL.STAGE_ENTERED_AT).setValue(proxy);
-      updated++;
-    }
-  });
-
-  Logger.log('Backfill complete: ' + updated + ' rows updated, ' + skipped + ' already had value');
-  return { updated: updated, skipped: skipped };
-}
-
-
-// ============================================================
-// ONE-OFF FIT SCORE BACKFILL
-// ============================================================
-
-/**
- * One-off: normalise all Fit Score cells to integer 0–10.
- *
- * Historical rows were analysed on a 0–100 scale (72, 48, 78, 82) or
- * stored as decimals (7.8, 8.5). The canonical scale is now INTEGER
- * 0–10 with no decimals. This function:
- *   - Divides any value >10 by 10 (0–100 normalisation)
- *   - Rounds all values to the nearest whole number
- *   - Leaves blanks and non-numerics alone
- *
- * SAFE TO RE-RUN: values already at integer 0–10 round to themselves,
- * so running twice is a no-op.
- *
- * Run from Apps Script editor: function dropdown → _backfillFitScores → Run.
- * Check Logs (View → Logs, or Cmd+Enter) for a summary of what changed.
- */
-function _backfillFitScores() {
-  const sheet = openPipeline();
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) { Logger.log('No data rows'); return; }
-
-  const range = sheet.getRange(2, COL.FIT_SCORE, lastRow - 1, 1);
-  const values = range.getValues();
-  const changes = [];
-  let updated = 0;
-  let skipped = 0;
-  let blank = 0;
-
-  const newValues = values.map(function (row, i) {
-    const rowNum = i + 2;
-    const raw = row[0];
-
-    // Blank cells stay blank
-    if (raw === '' || raw === null || raw === undefined) { blank++; return ['']; }
-
-    const n = parseFloat(raw);
-    if (isNaN(n)) { skipped++; return [raw]; }
-
-    // Normalise 0–100 scale to 0–10 if needed, then round to integer
-    const onTenScale = n > 10 ? n / 10 : n;
-    const normalised = Math.round(onTenScale);
-
-    // Already a correct integer — leave alone
-    if (normalised === n) { skipped++; return [raw]; }
-
-    changes.push({ row: rowNum, from: n, to: normalised });
-    updated++;
-    return [normalised];
-  });
-
-  range.setValues(newValues);
-
-  Logger.log('Fit score backfill complete');
-  Logger.log('  Updated: ' + updated);
-  Logger.log('  Skipped (already correct integer, or non-numeric): ' + skipped);
-  Logger.log('  Blank: ' + blank);
-  if (changes.length) {
-    Logger.log('Changes:');
-    changes.forEach(function (c) {
-      Logger.log('  Row ' + c.row + ': ' + c.from + ' → ' + c.to);
+function toggleMobileSearch() {
+  state.mobileSearchExpanded = !state.mobileSearchExpanded;
+  render();
+  if (state.mobileSearchExpanded) {
+    // Focus the input after it renders
+    requestAnimationFrame(function () {
+      const input = document.querySelector('.search-input');
+      if (input) input.focus();
     });
   }
-  return { updated: updated, skipped: skipped, blank: blank, changes: changes };
 }
-
-
-// ============================================================
-// ONE-OFF STATUS HISTORY BACKFILL
-// ============================================================
+function toggleMobileOverflow() {
+  state.mobileOverflowOpen = !state.mobileOverflowOpen;
+  render();
+}
+function toggleHeaderMenu() {
+  state.headerMenuOpen = !state.headerMenuOpen;
+  render();
+  // When opening, add a one-shot click-outside listener to auto-close
+  if (state.headerMenuOpen) {
+    setTimeout(function () {
+      document.addEventListener('click', closeHeaderMenuOnClickOutside, true);
+    }, 0);
+  }
+}
+function closeHeaderMenuOnClickOutside(ev) {
+  const menu = document.querySelector('.header-menu');
+  const burger = document.querySelector('.header-burger');
+  if (!menu) {
+    document.removeEventListener('click', closeHeaderMenuOnClickOutside, true);
+    return;
+  }
+  // Ignore clicks inside the menu OR on the burger itself (burger has its
+  // own toggle). Ignore clicks on the batch-menu-dropdown since that\'s
+  // a nested popover within the header-menu.
+  if (menu.contains(ev.target) || (burger && burger.contains(ev.target))) return;
+  // Click was outside — close
+  document.removeEventListener('click', closeHeaderMenuOnClickOutside, true);
+  state.headerMenuOpen = false;
+  render();
+}
 
 /**
- * One-off: reconstruct STATUS_HISTORY (col 38) from existing date columns.
- *
- * For each row we infer a plausible journey using the dates we DO have:
- *   - DATE_ADDED      → first event (status: 'Analysed')
- *   - APPLICATION_DATE → 'Applied' event (if present)
- *   - STAGE_ENTERED_AT → current status event (if newer than the others)
- *
- * Only fills cells where STATUS_HISTORY is currently blank. Re-runnable.
- *
- * Run from Apps Script editor: function dropdown → _backfillStatusHistory → Run.
- *
- * Note: this is best-effort reconstruction. We can't recover transitions
- * we have no dates for — e.g. if a card went Analysed → Ready to Apply →
- * Applied with no Ready-to-Apply timestamp, only Analysed and Applied
- * will show. From now on, all transitions are captured live.
+ * Display-facing label for a column. Internal keys stay the same
+ * (Potential/Applied/Engagement) so no data migration is needed when
+ * renaming for the UI. Update this map to relabel columns.
  */
-function _backfillStatusHistory() {
-  const sheet = openPipeline();
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) { Logger.log('No data rows'); return; }
-
-  const range = sheet.getRange(2, 1, lastRow - 1, TOTAL_COLS);
-  const values = range.getValues();
-  let updated = 0;
-  let skipped = 0;
-
-  values.forEach(function (r, i) {
-    const rowNum = i + 2;
-    const existing = r[COL.STATUS_HISTORY - 1];
-    if (existing) { skipped++; return; }
-
-    const status        = r[COL.STATUS - 1];
-    const dateAdded     = r[COL.DATE_ADDED - 1];
-    const applicationAt = r[COL.APPLICATION_DATE - 1];
-    const stageEntered  = r[COL.STAGE_ENTERED_AT - 1];
-    const lastActivity  = r[COL.LAST_ACTIVITY - 1];
-
-    const events = [];
-
-    // Genesis event — always Analysed at date added
-    if (dateAdded) {
-      events.push({ status: 'Analysed', at: toIso(dateAdded) });
-    }
-
-    // Applied event — for any status that's been through Applied
-    if (applicationAt && ['Applied', 'Interviewing', 'Interviewed', 'Offer', 'Accepted', 'Rejected', 'Withdrawn'].indexOf(status) > -1) {
-      events.push({ status: 'Applied', at: toIso(applicationAt) });
-    }
-
-    // Current status event — only if it's not already represented
-    const finalAt = toIso(stageEntered || lastActivity || new Date());
-    if (status && (!events.length || events[events.length - 1].status !== status)) {
-      events.push({ status: status, at: finalAt });
-    }
-
-    if (events.length) {
-      sheet.getRange(rowNum, COL.STATUS_HISTORY).setValue(JSON.stringify(events));
-      updated++;
-    }
-  });
-
-  Logger.log('Status history backfill complete');
-  Logger.log('  Updated: ' + updated);
-  Logger.log('  Skipped (already had history): ' + skipped);
-  return { updated: updated, skipped: skipped };
+const COLUMN_LABELS = {
+  'Potential':  'Prospects',
+  'Applied':    'Applied',
+  'Engagement': 'Engaged'
+};
+function columnLabel(key) {
+  return COLUMN_LABELS[key] || key;
 }
 
-function toIso(d) {
-  if (!d) return null;
-  if (d instanceof Date) return d.toISOString();
-  const parsed = new Date(d);
-  return isNaN(parsed.getTime()) ? null : parsed.toISOString();
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-
-// ============================================================
-// ONE-OFF COLUMN FORMATTING
-// ============================================================
-
-function _enforceColumnFormats() {
-  const sheet = openPipeline();
-  const lastRow = Math.max(2, sheet.getLastRow());
-  const numRows = lastRow - 1;
-
-  const dateCols = [
-    COL.ANALYSIS_DATE,
-    COL.LAST_ACTIVITY,
-    COL.APPLICATION_DATE,
-    COL.FOLLOW_UP_DATE,
-    COL.DATE_ADDED,
-    COL.STAGE_ENTERED_AT
-  ];
-  const dateFormat = 'd/MM/yyyy HH:mm';
-
-  dateCols.forEach(function (colIdx) {
-    const range = sheet.getRange(2, colIdx, numRows, 1);
-    range.setNumberFormat(dateFormat);
-  });
-
-  const textCols = [
-    COL.KEY_NOTES,
-    COL.COMPANY_INTEL,
-    COL.KEY_ALIGNMENTS,
-    COL.POTENTIAL_CONCERNS,
-    COL.TAILORED_PITCH,
-    COL.CULTURAL_FIT,
-    COL.RESUME_MD,
-    COL.COVER_LETTER_MD,
-    COL.INTERVIEW_PREP,
-    COL.YOUR_NOTES,
-    COL.PERSONAL_ANGLE,
-    COL.AD_CONTENT,
-    COL.STATUS_HISTORY
-  ];
-
-  textCols.forEach(function (colIdx) {
-    const range = sheet.getRange(2, colIdx, numRows, 1);
-    range.setNumberFormat('@');
-    range.setWrap(true);
-    range.setVerticalAlignment('top');
-  });
-
-  Logger.log('Column formats enforced across ' + numRows + ' data rows');
-  return { ok: true, rows: numRows };
+function escapeAttr(str) {
+  if (str === null || str === undefined) return '';
+  return String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;');
 }
+
+function toast(msg, type) {
+  const root = document.getElementById('toast-root');
+  root.innerHTML = '<div class="toast ' + (type || '') + '">' + escapeHtml(msg) + '</div>';
+  const t = root.querySelector('.toast');
+  requestAnimationFrame(function () { t.classList.add('visible'); });
+  setTimeout(function () {
+    if (t) t.classList.remove('visible');
+    setTimeout(function () { root.innerHTML = ''; }, 300);
+  }, 2400);
+}
+
+/* ============================================================
+   LOADING / SAVING INDICATORS
+   ============================================================ */
+
+// Secondary pool — shorter, drier one-liners shown as a sub-line
+// under the main quip on the initial page load. These are less noisy
+// and change less often so the footer feels anchored, not flickery.
+const LOADING_SUB_QUIPS = [
+  'Faster than a recruiter reply.',
+  'Still quicker than an "exciting opportunity" email.',
+  'Not as slow as a 7-round interview process.',
+  'Less painful than a take-home task.',
+  'Fewer rounds than a startup hiring panel.',
+  'More responsive than most HR inboxes.',
+  'At least this one won\'t ghost you.',
+  'Promise: no whiteboard interview.',
+  'No personality test required.',
+  'No "quick culture chat" at the end.',
+  'Your data is safe. Your dignity, we\'re working on.'
+];
+
+let _subQuipInterval = null;
+function startSubQuipRotation() {
+  stopSubQuipRotation();
+  const start = Math.floor(Math.random() * LOADING_SUB_QUIPS.length);
+  let i = start;
+  const setSub = function (idx) {
+    const el = document.getElementById('loading-sub');
+    if (!el) return;
+    el.style.animation = 'none';
+    el.textContent = LOADING_SUB_QUIPS[idx];
+    void el.offsetWidth;
+    el.style.animation = '';
+  };
+  setSub(i);
+  _subQuipInterval = setInterval(function () {
+    i = (i + 1) % LOADING_SUB_QUIPS.length;
+    setSub(i);
+  }, 4400);  // rotate half as often as the main quip so footer feels anchored
+}
+function stopSubQuipRotation() {
+  if (_subQuipInterval) { clearInterval(_subQuipInterval); _subQuipInterval = null; }
+}
+
+// Quip pool — dry, knowing job-hunt humour with a dark streak. Rotated
+// every ~2.2s during long operations to keep the loader feeling alive.
+// Keep to single-line length (~50 chars max) so the UI doesn\'t jump
+// when they swap in. Ordered roughly lightest → darkest but shuffled
+// via random start index in startQuipRotation so the first one\'s a
+// surprise every time.
+const LOADING_QUIPS = [
+  // Resume theatre
+  'Polishing your achievements…',
+  'Rewording "responsible for" again…',
+  'Bullet-pointing your life…',
+  'Adding "strategic" to every verb…',
+  'Writing 18 years of wisdom into 2 pages…',
+  'Quantifying things that weren\'t really quantifiable…',
+  'Converting one resume into forty-seven…',
+  'Turning a 9-month gap into a sabbatical…',
+  'Reframing "laid off" as "exciting next chapter"…',
+  'Sprinkling in the keywords the ATS wants…',
+
+  // Cover letter theatre
+  'Generating "Dear Hiring Manager"…',
+  'Pretending to have read the company blog…',
+  'Adding a personality to the cover letter…',
+  'Faking enthusiasm for the Q4 roadmap…',
+  'Avoiding the word "passionate"…',
+  'Slipping "synergy" past your self-respect…',
+
+  // Job ad decoding
+  'Reading job ads so you don\'t have to…',
+  'Translating "fast-paced environment" to "we\'ll break you"…',
+  'Decoding "competitive salary" as "below market"…',
+  'Spotting "wearing many hats" — three jobs, one salary…',
+  'Reading "family-like culture" as "no boundaries"…',
+  'Interpreting "equity" as "you\'ll never see that money"…',
+  'Checking if "unlimited leave" means "none taken"…',
+  'Filtering out roles that rhyme with "unpaid"…',
+  'Spotting the "other duties as required"…',
+  'Confirming whether the recruiter actually exists…',
+  'Decoding the salary band from the silence…',
+
+  // The rejection cycle
+  'Counting ghosts since March…',
+  'Interpreting "we moved forward with another candidate"…',
+  'Auditing which rejection was personal…',
+  'Checking if you were rejected before applying…',
+  'Accepting "role filled internally" was always the plan…',
+  'Remembering what a reply email feels like…',
+  'Counting minutes until the "just following up" email…',
+  'Waiting for the hiring manager to reply…',
+
+  // Existential
+  'Calibrating expectations downward, again…',
+  'Weighing dignity against the mortgage…',
+  'Budgeting one more month of this…',
+  'Negotiating with your imposter syndrome…',
+  'Pretending this time will be different…',
+  'Mapping four interview rounds to the value of one coffee chat…',
+  'Asking if "equity" is a verb or a noun here…',
+
+  // Meta / logistics
+  'Stalking your future boss on LinkedIn…',
+  'Calculating commutes you\'ll never do…',
+  'Running it through the recruiter filter…',
+  'Making "n8n" sound interesting to non-technical hirers…',
+  'Applying Oxford commas to your wins…',
+  'Checking who already ghosted you…',
+  'Pre-emptively forgetting this company\'s name…'
+];
+
+let _quipInterval = null;
+
+/**
+ * Rotate quips inside any .loading-quip element every 2.2s.
+ * Starts idempotent — calling twice won\'t create two intervals.
+ * Picks a random starting index so reloads don\'t always show the same one.
+ */
+function startQuipRotation() {
+  stopQuipRotation();
+  // Pick random starting quip
+  const start = Math.floor(Math.random() * LOADING_QUIPS.length);
+  let i = start;
+  const setQuip = function (idx) {
+    document.querySelectorAll('.loading-quip').forEach(function (el) {
+      // Re-trigger fade animation by cloning innerHTML then restoring
+      el.style.animation = 'none';
+      el.textContent = LOADING_QUIPS[idx];
+      // Force reflow then restart animation
+      void el.offsetWidth;
+      el.style.animation = '';
+    });
+  };
+  setQuip(i);
+  _quipInterval = setInterval(function () {
+    i = (i + 1) % LOADING_QUIPS.length;
+    setQuip(i);
+  }, 2200);
+}
+
+function stopQuipRotation() {
+  if (_quipInterval) {
+    clearInterval(_quipInterval);
+    _quipInterval = null;
+  }
+}
+
+/**
+ * Show a save indicator pill in the top-right (bottom on mobile) with a
+ * rotating quip. Returns a token that must be passed to hideSaveIndicator
+ * to dismiss it. Multiple concurrent ops are supported — the indicator
+ * stays visible until ALL tokens have been hidden. Pass an optional
+ * `label` to show a fixed prefix (e.g. "Saving…") before the quip.
+ */
+let _saveIndicatorActive = new Set();
+let _saveIndicatorQuipInterval = null;
+let _saveIndicatorToken = 0;
+let _saveIndicatorShownAt = 0;
+const SAVE_INDICATOR_MIN_MS = 700;  // minimum time the pill stays visible
+
+function showSaveIndicator(label) {
+  const token = ++_saveIndicatorToken;
+  _saveIndicatorActive.add(token);
+  const root = document.getElementById('save-indicator-root');
+  if (!root) return token;
+
+  if (!root.querySelector('.save-indicator')) {
+    // First concurrent op — mount the indicator
+    const labelText = label || 'Saving';
+    root.innerHTML =
+      '<div class="save-indicator">' +
+        '<div class="save-indicator-bars">' +
+          '<div class="loading-bar"></div>' +
+          '<div class="loading-bar"></div>' +
+          '<div class="loading-bar"></div>' +
+        '</div>' +
+        '<span class="save-indicator-label">' + escapeHtml(labelText) + '…</span>' +
+      '</div>';
+    _saveIndicatorShownAt = Date.now();
+    _startSaveIndicatorQuips();
+  }
+  return token;
+}
+
+function hideSaveIndicator(token) {
+  _saveIndicatorActive.delete(token);
+  if (_saveIndicatorActive.size > 0) return;  // other ops still running
+
+  // Keep the pill visible for at least SAVE_INDICATOR_MIN_MS so super-fast
+  // operations don\'t flash-and-vanish. Makes the UI feel intentional.
+  const elapsed = Date.now() - _saveIndicatorShownAt;
+  const wait = Math.max(0, SAVE_INDICATOR_MIN_MS - elapsed);
+  setTimeout(function () {
+    // Guard: another op may have started during the wait
+    if (_saveIndicatorActive.size > 0) return;
+    const root = document.getElementById('save-indicator-root');
+    if (!root) return;
+    const el = root.querySelector('.save-indicator');
+    if (!el) return;
+    el.classList.add('hiding');
+    if (_saveIndicatorQuipInterval) {
+      clearInterval(_saveIndicatorQuipInterval);
+      _saveIndicatorQuipInterval = null;
+    }
+    setTimeout(function () { root.innerHTML = ''; }, 280);
+  }, wait);
+}
+
+function _startSaveIndicatorQuips() {
+  if (_saveIndicatorQuipInterval) clearInterval(_saveIndicatorQuipInterval);
+  const start = Math.floor(Math.random() * LOADING_QUIPS.length);
+  let i = start;
+  const setLabel = function (idx) {
+    const el = document.querySelector('.save-indicator .save-indicator-label');
+    if (el) el.textContent = LOADING_QUIPS[idx];
+  };
+  setLabel(i);
+  _saveIndicatorQuipInterval = setInterval(function () {
+    i = (i + 1) % LOADING_QUIPS.length;
+    setLabel(i);
+  }, 2400);
+}
+
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') {
+    if (state.outcomePopover) { closeOutcomePopover(); return; }
+    if (state.modalOpen) { closeModal(); return; }
+    if (state.applyPrompt) { dismissApplyPrompt(); return; }
+  }
+});
+
+window.addEventListener('resize', function () {
+  if (state.outcomePopover) closeOutcomePopover();
+});
+
+// Sticky header drop-shadow + offset: measure the header height and set
+// a CSS variable so the column headers stick right below the main header
+// regardless of its actual rendered height (which varies on mobile).
+function updateStickyOffset() {
+  const header = document.querySelector('.header');
+  if (!header) return;
+  const h = header.getBoundingClientRect().height;
+  document.documentElement.style.setProperty('--sticky-offset', h + 'px');
+}
+
+window.addEventListener('scroll', function () {
+  const header = document.querySelector('.header');
+  if (!header) return;
+  if (window.scrollY > 4) header.classList.add('is-stuck');
+  else header.classList.remove('is-stuck');
+}, { passive: true });
+
+window.addEventListener('resize', updateStickyOffset);
+// Re-render on resize so mobile↔desktop transitions refresh the funnel
+// layout (one column on mobile, three on desktop). Debounced so rapid
+// drag-resize doesn\'t hammer the DOM.
+let _resizeTimer = null;
+let _wasMobile = isMobile();
+window.addEventListener('resize', function () {
+  clearTimeout(_resizeTimer);
+  _resizeTimer = setTimeout(function () {
+    const nowMobile = isMobile();
+    if (nowMobile !== _wasMobile) {
+      _wasMobile = nowMobile;
+      if (state.pipeline && state.pipeline.length) render();
+    }
+  }, 150);
+});
+// Update after every render too — header height changes when the user
+// adds/removes queue items, toggles holding sections etc.
+const _origRender = render;
+render = function () {
+  _origRender.apply(this, arguments);
+  // Schedule after paint so the measurement reflects the rendered height
+  requestAnimationFrame(updateStickyOffset);
+};
+
+initTheme();
+loadSortPrefs();
+init();
+</script>
+</body>
+</html>
