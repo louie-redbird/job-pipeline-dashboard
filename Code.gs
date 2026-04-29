@@ -361,13 +361,96 @@ function getQueue() {
 function addToQueue(body) {
   const content = (body.content || '').trim();
   const url     = (body.url || '').trim();
+  const force   = body.force === true;
   if (!content) return { ok: false, error: 'Content is required' };
   if (!url)     return { ok: false, error: 'URL is required' };
+
+  // Smart duplicate detection — exact URL match against both the existing
+  // pipeline AND the current queue. Returns a `duplicate` flag with details
+  // so the frontend can show a "you already have this — add anyway?" prompt.
+  // Pass force:true to bypass the check.
+  if (!force) {
+    const dup = findDuplicateByUrl(url);
+    if (dup) {
+      return {
+        ok: false,
+        duplicate: true,
+        location: dup.location,        // 'pipeline' or 'queue'
+        existing: dup.summary,         // brief blob for UI to display
+        message: 'This URL already exists in the ' + dup.location + '. Pass force:true to add anyway.'
+      };
+    }
+  }
 
   const sheet = openQueue();
   const id = generateId();
   sheet.appendRow([id, url, content, new Date()]);
   return { ok: true, queue: getQueue().items };
+}
+
+/**
+ * Find an existing pipeline row OR queue item with the same URL.
+ * Returns { location, summary } if found, or null.
+ *
+ * Pipeline scan looks at the URL column (col F) for the last 500 rows
+ * — same window as the legacy appendAnalysedJob duplicate check, balances
+ * thoroughness with sheet read budget.
+ *
+ * Queue scan reads the whole queue (typically a handful of rows so no
+ * pagination needed).
+ *
+ * URL comparison is case-insensitive on host but case-preserved on path,
+ * since query strings on job ads are sometimes case-significant.
+ */
+function findDuplicateByUrl(url) {
+  if (!url) return null;
+  const target = String(url).trim().toLowerCase();
+
+  // Check pipeline first (more authoritative — these are real cards)
+  const pipelineSheet = openPipeline();
+  const lastRow = pipelineSheet.getLastRow();
+  if (lastRow > 1) {
+    const startRow = Math.max(2, lastRow - 499);
+    const range = pipelineSheet.getRange(startRow, 1, lastRow - startRow + 1, TOTAL_COLS);
+    const values = range.getValues();
+    for (var i = 0; i < values.length; i++) {
+      const rowUrl = String(values[i][COL.URL - 1] || '').trim().toLowerCase();
+      if (rowUrl && rowUrl === target) {
+        return {
+          location: 'pipeline',
+          summary: {
+            rowId:   startRow + i,
+            company: values[i][COL.COMPANY - 1] || '',
+            role:    values[i][COL.ROLE - 1] || '',
+            status:  values[i][COL.STATUS - 1] || '',
+            dateAdded: values[i][COL.DATE_ADDED - 1] || null
+          }
+        };
+      }
+    }
+  }
+
+  // Then check the intake queue
+  const queueSheet = openQueue();
+  const qLastRow = queueSheet.getLastRow();
+  if (qLastRow > 1) {
+    const qValues = queueSheet.getRange(2, 1, qLastRow - 1, 4).getValues();
+    for (var j = 0; j < qValues.length; j++) {
+      const qUrl = String(qValues[j][1] || '').trim().toLowerCase();
+      if (qUrl && qUrl === target) {
+        return {
+          location: 'queue',
+          summary: {
+            queueId: String(qValues[j][0]),
+            url:     qValues[j][1],
+            addedAt: qValues[j][3]
+          }
+        };
+      }
+    }
+  }
+
+  return null;
 }
 
 function removeFromQueue(body) {
