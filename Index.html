@@ -5321,7 +5321,10 @@ function renderInterviewPrepTabBody(row) {
           '<p style="font-size:14px;font-weight:600;margin:0 0 3px;letter-spacing:-0.015em;">Practice session</p>' +
           '<p class="small-meta">' + counts.nailed + ' nailed · ' + counts.inProgress + ' in progress · ' + totalRounds + ' rounds logged</p>' +
         '</div>' +
-        '<button class="accent" onclick="copyContinuePracticePrompt(' + row.rowId + ')">Copy continue practice prompt</button>' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
+          '<button class="accent" onclick="copyVoicePracticePrompt(' + row.rowId + ')">Copy for ChatGPT (voice)</button>' +
+          '<button onclick="openModal(\'interviewPrepPasteBack\',{rowId:' + row.rowId + '})">Save practice JSON</button>' +
+        '</div>' +
       '</div>' +
       progressBar +
     '</div>'
@@ -6727,6 +6730,7 @@ function copyInterviewPrepPrompt(rowId) {
   setTimeout(function () { openModal('interviewPrepPasteBack', { rowId: rowId }); }, 300);
 }
 function copyContinuePracticePrompt(rowId) { copyPromptFromApi('continuePractice', rowId, 'Continue practice prompt copied'); }
+function copyVoicePracticePrompt(rowId) { copyPromptFromApi('voicePractice', rowId, 'Voice practice prompt copied — paste into ChatGPT (voice mode)'); }
 
 /**
  * Single-card "Refresh intel" — reuses the batch analyse infrastructure
