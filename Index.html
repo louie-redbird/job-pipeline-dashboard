@@ -4773,15 +4773,6 @@ const DETAIL_TABS = [
     lockReason: 'Available after the card is analysed'
   },
   {
-    id: 'submittedDocs',
-    label: 'Submitted docs',
-    unlockedWhen: function (row) {
-      // Submitted docs only meaningful once you\'ve actually applied
-      return hasBeenApplied(row);
-    },
-    lockReason: 'Available after you mark this card as Applied'
-  },
-  {
     id: 'interviewPrep',
     label: 'Interview prep',
     unlockedWhen: function (row) {
@@ -4864,7 +4855,7 @@ function renderTabBody(row, tab) {
   switch (tab) {
     case 'intelligence':  return renderIntelligenceTabBody(row);
     case 'docs':          return renderDocsTabBody(row);
-    case 'submittedDocs': return renderSubmittedDocsTabBody(row);
+    case 'submittedDocs': return renderDocsTabBody(row); // back-compat: legacy state routes to unified Docs
     case 'interviewPrep': return renderInterviewPrepTabBody(row);
     case 'notes':         return renderNotesTabBody(row);
     default:              return renderIntelligenceTabBody(row);
@@ -6715,8 +6706,35 @@ async function handleBatchUpdateJourney() {
    ACTIONS
    ============================================================ */
 
-function openModal(which, data) { state.modalOpen = which; state.modalData = data || {}; renderModal(); }
-function closeModal() { state.modalOpen = null; state.modalData = {}; if (state.outcomePopover) state.outcomePopover = null; renderModal(); renderPopovers(); }
+function openModal(which, data, opts) {
+  opts = opts || {};
+  if (opts.topLevel) {
+    state.modalStack = [];
+  } else if (state.modalOpen && !opts.replace) {
+    state.modalStack.push({
+      modalOpen: state.modalOpen,
+      modalData: state.modalData,
+      selectedTab: state.selectedTab
+    });
+  }
+  state.modalOpen = which;
+  state.modalData = data || {};
+  renderModal();
+}
+function closeModal() {
+  if (state.outcomePopover) state.outcomePopover = null;
+  if (state.modalStack && state.modalStack.length) {
+    const parent = state.modalStack.pop();
+    state.modalOpen = parent.modalOpen;
+    state.modalData = parent.modalData;
+    if (parent.selectedTab !== undefined) state.selectedTab = parent.selectedTab;
+  } else {
+    state.modalOpen = null;
+    state.modalData = {};
+  }
+  renderModal();
+  renderPopovers();
+}
 
 function toggleCardSelection(rowId) {
   if (!state.batchMode) return;
@@ -6731,7 +6749,7 @@ function openCardDetail(rowId) {
   // correct next-action tab for this card\'s current state. The unified
   // tab system handles all default routing — no per-stage logic here.
   state.selectedTab = null;
-  openModal('cardDetail', { rowId: rowId });
+  openModal('cardDetail', { rowId: rowId }, { topLevel: true });
 }
 
 function enterBatchMode(action) {
@@ -6904,12 +6922,37 @@ async function copyToClipboard(text, successMsg) {
   }
 }
 
-async function handleAddToQueue() {
+async function handleAddToQueue(force) {
   const content = document.getElementById('intake-content').value.trim();
   const url = document.getElementById('intake-url').value.trim();
   if (!content || !url) { toast('Content and URL are both required', 'error'); return; }
   try {
-    const res = await apiPost('addToQueue', { content: content, url: url });
+    const body = { content: content, url: url };
+    if (force === true) body.force = true;
+    const res = await apiPost('addToQueue', body);
+
+    // Smart duplicate detection (Deploy A2). Backend returns ok:false +
+    // duplicate:true when the URL already exists in pipeline or queue.
+    // Show context-aware confirm prompt; recurse with force on user OK.
+    if (!res.ok && res.duplicate) {
+      const ex = res.existing || {};
+      let detail;
+      if (res.location === 'pipeline') {
+        const dateStr = ex.dateAdded
+          ? ' on ' + new Date(ex.dateAdded).toLocaleDateString('en-AU')
+          : '';
+        detail = 'Already in your pipeline as "' + (ex.role || 'Untitled') + ' at ' +
+                 (ex.company || 'Unknown') + '" (' + (ex.status || '?') + ')' + dateStr + '.';
+      } else {
+        detail = 'Already in your intake queue waiting to be analysed.';
+      }
+      const ok = confirm(detail + '\n\nAdd it again anyway?');
+      if (ok) {
+        await handleAddToQueue(true);
+      }
+      return;
+    }
+
     if (!res.ok) throw new Error(res.error || 'Failed to add to queue');
     state.queue = res.queue || [];
     state.queueCount = state.queue.length;
